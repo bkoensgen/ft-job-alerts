@@ -6,6 +6,7 @@ import pathlib
 import urllib.parse
 import urllib.request
 from typing import Any
+from urllib.error import HTTPError
 
 from .auth import AuthClient
 from .config import Config
@@ -36,7 +37,7 @@ class OffresEmploiClient:
         if keywords:
             params["motsCles"] = ",".join(keywords)
         if departements:
-            params["departement"] = ",".join(departements)
+            params["departement"] = ",".join([d.strip() for d in departements])
         if commune:
             params["commune"] = commune
             if distance_km is not None:
@@ -48,19 +49,36 @@ class OffresEmploiClient:
         if published_since_days is not None:
             params["publieeDepuis"] = int(published_since_days)
 
-        # Pagination via range (0-based)
+        # Pagination
         lim = min(max(int(limit), 1), 150)
         start = max(int(page), 0) * lim
         end = start + lim - 1
-        params["range"] = f"{start}-{end}"
+        use_range_header = self.cfg.range_header
+        if not use_range_header:
+            params["range"] = f"{start}-{end}"
 
         url = f"{self.cfg.offres_search_url}?{urllib.parse.urlencode(params)}"
         token = self.auth.get_token()
         req = urllib.request.Request(url)
         req.add_header("Authorization", f"Bearer {token}")
         req.add_header("Accept", "application/json")
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            raw = resp.read().decode("utf-8")
+        if self.cfg.accept_language:
+            req.add_header("Accept-Language", self.cfg.accept_language)
+        if use_range_header:
+            req.add_header("Range", f"{start}-{end}")
+        if self.cfg.debug:
+            print("[debug] GET", url)
+            if use_range_header:
+                print("[debug] Header Range:", f"{start}-{end}")
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                raw = resp.read().decode("utf-8")
+        except HTTPError as e:
+            try:
+                body = e.read().decode("utf-8")
+            except Exception:
+                body = ""
+            raise RuntimeError(f"Offres search failed ({e.code}) for URL: {url}\nBody: {body}")
         obj = json.loads(raw) if raw else {}
         # The exact structure may vary; normalize to a list of offers
         if isinstance(obj, dict) and "resultats" in obj:
@@ -88,9 +106,18 @@ class OffresEmploiClient:
         req = urllib.request.Request(url)
         req.add_header("Authorization", f"Bearer {token}")
         req.add_header("Accept", "application/json")
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            raw = resp.read().decode("utf-8")
-        return json.loads(raw)
+        if self.cfg.accept_language:
+            req.add_header("Accept-Language", self.cfg.accept_language)
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                raw = resp.read().decode("utf-8")
+            return json.loads(raw) if raw else {}
+        except HTTPError as e:
+            try:
+                body = e.read().decode("utf-8")
+            except Exception:
+                body = ""
+            raise RuntimeError(f"Offres detail failed ({e.code}) for {offer_id}: {body}")
 
 
 class ROMEClient:

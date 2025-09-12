@@ -40,6 +40,9 @@ class Config:
     oauth_scope: str | None
     oauth_audience: str | None
     oauth_use_basic: bool
+    range_header: bool
+    accept_language: str | None
+    debug: bool
     offres_search_url: str
     offres_detail_url: str
     lbb_api_url: str | None
@@ -68,6 +71,9 @@ def load_config() -> Config:
         oauth_scope=os.getenv("FT_SCOPE"),
         oauth_audience=os.getenv("FT_AUDIENCE"),
         oauth_use_basic=_get_bool("FT_OAUTH_BASIC", True),
+        range_header=_get_bool("FT_RANGE_HEADER", False),
+        accept_language=os.getenv("FT_ACCEPT_LANGUAGE", "fr-FR"),
+        debug=_get_bool("FT_DEBUG", False),
         offres_search_url=os.getenv(
             "FT_OFFRES_SEARCH_URL",
             "https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search",
