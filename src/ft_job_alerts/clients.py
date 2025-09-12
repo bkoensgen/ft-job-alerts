@@ -29,6 +29,9 @@ class OffresEmploiClient:
         page: int = 0,
         sort: int | None = None,
         published_since_days: int | None = None,
+        min_creation_date: str | None = None,
+        max_creation_date: str | None = None,
+        origine_offre: int | None = None,
     ) -> list[dict[str, Any]]:
         if self.cfg.api_simulate:
             return self._load_sample()
@@ -48,6 +51,12 @@ class OffresEmploiClient:
             params["sort"] = int(sort)
         if published_since_days is not None:
             params["publieeDepuis"] = int(published_since_days)
+        if min_creation_date:
+            params["minCreationDate"] = min_creation_date
+        if max_creation_date:
+            params["maxCreationDate"] = max_creation_date
+        if origine_offre is not None:
+            params["origineOffre"] = int(origine_offre)
 
         # Pagination
         lim = min(max(int(limit), 1), 150)

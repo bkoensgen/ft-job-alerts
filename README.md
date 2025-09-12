@@ -91,8 +91,14 @@ Search tips (Offres v2)
 - Use `--commune <INSEE>` + `--distance-km N` for a radius search (the API ignores distance without commune).
 - Or use `--dept 68,67` for department filters (no radius).
 - Sorting: `--sort 0|1|2` where 1=date desc (default), 0=pertinence/date, 2=distance/pertinence.
-- Pagination: `--page P` and `--limit L` map to `range=P*L-(P*L+L-1)` (L max 150).
+- Pagination: `--page P` and `--limit L` map to `range=P*L-(P*L+L-1)` (L max 150). Use `--all --max-pages N` to iterate pages automatically.
 - `publieeDepuis` (days): allowed values are 1, 3, 7, 14, 31. The CLI auto-snaps invalid values to the nearest allowed.
 - Debugging 400:
   - Set `FT_DEBUG=1` to print the request URL.
   - If needed, set `FT_RANGE_HEADER=1` to send `Range: start-end` header instead of `range` query.
+
+Nationwide examples
+- Last 31 days, all France, iterate pages:
+  - `python run.py fetch --keywords "robotique" --published-since-days 31 --limit 100 --all --max-pages 20`
+- Radius around Mulhouse (INSEE 68224), 50 km:
+  - `python run.py fetch --keywords "robotique" --commune 68224 --distance-km 50 --published-since-days 14 --limit 100 --all --max-pages 10`

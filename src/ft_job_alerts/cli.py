@@ -120,17 +120,35 @@ def cmd_fetch(args):
             print(f"[warn] publieeDepuis={pdays} non supporté; utilisation de {nearest} (valeurs permises: 1,3,7,14,31)")
             pdays = nearest
 
-    raw = client.search(
-        keywords=keywords,
-        departements=departements,
-        commune=commune,
-        distance_km=distance_km,
-        rome_codes=rome_codes,
-        limit=args.limit,
-        page=args.page,
-        sort=args.sort,
-        published_since_days=pdays,
-    )
+    def do_page(page: int) -> list[dict[str, Any]]:
+        return client.search(
+            keywords=keywords,
+            departements=departements,
+            commune=commune,
+            distance_km=distance_km,
+            rome_codes=rome_codes,
+            limit=args.limit,
+            page=page,
+            sort=args.sort,
+            published_since_days=pdays,
+            min_creation_date=args.min_creation,
+            max_creation_date=args.max_creation,
+            origine_offre=args.origine_offre,
+        )
+
+    raw_all: list[dict[str, Any]] = []
+    if args.fetch_all:
+        max_pages = args.max_pages
+        for p in range(0, max_pages):
+            batch = do_page(p)
+            if not batch:
+                break
+            raw_all.extend(batch)
+            if len(batch) < args.limit:
+                break
+        raw = raw_all
+    else:
+        raw = do_page(args.page)
 
     # Filter + score
     base_lat = 47.76
@@ -305,6 +323,15 @@ def build_parser() -> argparse.ArgumentParser:
                          help="0=pertinence/date, 1=date/pertinence, 2=distance/pertinence")
     s_fetch.add_argument("--published-since-days", dest="published_since_days", type=int, default=None,
                          help="Only offers published since N days (allowed: 1,3,7,14,31)")
+    s_fetch.add_argument("--min-creation", dest="min_creation", default=None,
+                         help="Filter minCreationDate (yyyy-MM-dd'T'hh:mm:ss'Z')")
+    s_fetch.add_argument("--max-creation", dest="max_creation", default=None,
+                         help="Filter maxCreationDate (yyyy-MM-dd'T'hh:mm:ss'Z')")
+    s_fetch.add_argument("--origine-offre", dest="origine_offre", type=int, default=None,
+                         help="1 = France Travail, 2 = Partenaire")
+    s_fetch.add_argument("--all", dest="fetch_all", action="store_true", help="Fetch all pages until exhausted")
+    s_fetch.add_argument("--max-pages", dest="max_pages", type=int, default=10,
+                         help="Max pages when using --all")
     s_fetch.set_defaults(func=cmd_fetch)
 
     s_run = sub.add_parser("run-daily", help="Fetch + notify new and follow-ups")
