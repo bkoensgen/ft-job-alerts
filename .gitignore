@@ -6,6 +6,9 @@ venv/
 
 # Local env
 .env
+.env_old
+.env.*
+!.env.example
 
 # Data outputs (keep samples tracked)
 data/ft_jobs.db

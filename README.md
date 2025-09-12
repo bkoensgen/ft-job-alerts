@@ -50,6 +50,31 @@ Notes
 - Network calls are disabled in this environment; simulate mode provides realistic flow. Replace simulate with real endpoints once credentials are set.
 - ROME 4.0 and La Bonne Boîte clients are stubbed for now; provide codes via CLI/env, or later plug real APIs.
 
+Most useful commands
+- Check OAuth config and token:
+  - `python run.py auth-check`
+- Nationwide, last 31 days, iterate pages (100/page up to 20 pages):
+  - `python run.py fetch --keywords "robotique" --published-since-days 31 --limit 100 --all --max-pages 20`
+- Radius around Mulhouse (INSEE 68224), 50 km, last 14 days:
+  - `python run.py fetch --keywords "robotique" --commune 68224 --distance-km 50 --published-since-days 14 --limit 100 --all --max-pages 10`
+- Departments 68 and 67, last 31 days:
+  - `python run.py fetch --keywords "robotique" --dept 68,67 --published-since-days 31 --limit 100 --all --max-pages 10`
+- Enrich with full descriptions + apply URL (detail endpoint):
+  - `python run.py enrich --days 31 --only-missing-description --limit 500 --sleep-ms 200`
+- Export for AI analysis (Markdown, full description):
+  - `python run.py export --format md --days 31 --min-score 2.0 --top 200 --desc-chars -1`
+- Export CSV (full fields) and JSONL:
+  - `python run.py export --format csv --days 31 --outfile data/out/offres.csv`
+  - `python run.py export --format jsonl --days 31 --outfile data/out/offres.jsonl`
+
+Broaden results (keyword sweep)
+- Run several fetches (they merge in DB):
+  - `robotique`, `robot`, `ROS`, `automatisme`, `automatisation`, `cobot`, `vision`, `AGV`, `AMR`
+- Example (nationwide, 31 days, 100/page, all pages):
+  - `python run.py fetch --keywords "robot" --published-since-days 31 --limit 100 --all --max-pages 20`
+  - `python run.py fetch --keywords "automatisme" --published-since-days 31 --limit 100 --all --max-pages 20`
+  - `python run.py fetch --keywords "vision" --published-since-days 31 --limit 100 --all --max-pages 20`
+
 Export usage (analysis-friendly)
 - Export last 7 days, top 50 by score to TXT with descriptions:
   - `python run.py export --format txt --days 7 --top 50 --desc-chars 500`
