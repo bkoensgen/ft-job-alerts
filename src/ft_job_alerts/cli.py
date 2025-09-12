@@ -391,10 +391,13 @@ def cmd_nlp_stats(args):
     )
     docs_core: list[list[str]] = []
     docs_other: list[list[str]] = []
+    extra_stops = []
+    if getattr(args, "stop_add", None):
+        extra_stops = [s.strip() for s in str(args.stop_add).split(";") if s.strip()]
     for r in rows:
         d = {k: r[k] for k in r.keys()}
         text = (d.get("title") or "") + "\n" + (d.get("description") or "")
-        toks = tokenize(text, keep=["c++","ros2","ros","moveit"])
+        toks = tokenize(text, keep=["c++","ros2","ros","moveit"], extra_stops=extra_stops)
         from .tags import compute_labels as _cl
         labels = _cl(d)
         if labels.get("CORE_ROBOTICS"):
@@ -406,12 +409,58 @@ def cmd_nlp_stats(args):
     from collections import Counter
     ca, cb = Counter(), Counter()
     ba, bb = Counter(), Counter()
+    # Document frequencies for pruning
+    df_tok: Dict[str, int] = {}
+    df_big: Dict[str, int] = {}
+    total_docs = len(docs_core) + len(docs_other)
+    min_df = float(getattr(args, "min_df", 0.005))
+    max_df = float(getattr(args, "max_df", 0.4))
+    from .nlp import build_stopwords
+    stops = build_stopwords(extra_stops)
+
+    def add_doc(tokens: list[str], is_core: bool):
+        seen_t = set(tokens)
+        for t in seen_t:
+            df_tok[t] = df_tok.get(t, 0) + 1
+        ca.update(tokens) if is_core else cb.update(tokens)
+        bgs = [" ".join(bg) for bg in bigrams(tokens)]
+        seen_b = set(bgs)
+        for b in seen_b:
+            df_big[b] = df_big.get(b, 0) + 1
+        ba.update(bgs) if is_core else bb.update(bgs)
+
     for toks in docs_core:
-        ca.update(toks)
-        ba.update([" ".join(bg) for bg in bigrams(toks)])
+        add_doc(toks, True)
     for toks in docs_other:
-        cb.update(toks)
-        bb.update([" ".join(bg) for bg in bigrams(toks)])
+        add_doc(toks, False)
+
+    # Prune tokens by DF and bigrams with only stopwords
+    def acceptable_df(df_count: int) -> bool:
+        if total_docs == 0:
+            return False
+        ratio = df_count / total_docs
+        return (min_df <= ratio <= max_df)
+
+    def prune_counts(counter: Counter, df_map: Dict[str, int]) -> Counter:
+        new = Counter()
+        for t, c in counter.items():
+            if df_map.get(t) is None:
+                continue
+            if acceptable_df(df_map.get(t, 0)):
+                new[t] = c
+        return new
+
+    def is_bigram_stop(b: str) -> bool:
+        parts = b.split(" ", 1)
+        if len(parts) != 2:
+            return True
+        a, b2 = parts[0], parts[1]
+        return (a in stops) and (b2 in stops)
+
+    ca = prune_counts(ca, df_tok)
+    cb = prune_counts(cb, df_tok)
+    ba = Counter({k: v for k, v in ba.items() if acceptable_df(df_big.get(k, 0)) and not is_bigram_stop(k)})
+    bb = Counter({k: v for k, v in bb.items() if acceptable_df(df_big.get(k, 0)) and not is_bigram_stop(k)})
 
     # Compute log-odds
     token_scores = log_odds_with_prior(ca, cb, alpha=0.1)
@@ -654,6 +703,9 @@ def build_parser() -> argparse.ArgumentParser:
     s_nlp.add_argument("--min-score", dest="min_score", type=float, default=None)
     s_nlp.add_argument("--limit", type=int, default=200000)
     s_nlp.add_argument("--top", type=int, default=40)
+    s_nlp.add_argument("--min-df", dest="min_df", type=float, default=0.005, help="Min doc freq ratio to keep token/bigram")
+    s_nlp.add_argument("--max-df", dest="max_df", type=float, default=0.4, help="Max doc freq ratio to keep token/bigram")
+    s_nlp.add_argument("--stop-add", dest="stop_add", default=None, help="Extra stopwords (semicolon-separated)")
     s_nlp.add_argument("--outfile-tokens", dest="outfile_tokens", default=None)
     s_nlp.add_argument("--outfile-bigrams", dest="outfile_bigrams", default=None)
     s_nlp.set_defaults(func=cmd_nlp_stats)

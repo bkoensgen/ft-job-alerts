@@ -16,6 +16,10 @@ STOPWORDS_FR_EN = set(
         "le","la","les","un","une","des","du","de","d","au","aux","et","en","dans","sur","avec","pour","par","ou","où","que","qui","quoi","dont","cela","cette","cet","ce","ces","son","sa","ses","leur","leurs","nos","notre","vos","votre","plus","moins","très","tres","bien","a","à","est","sont","être","etes","etes","été","etre","fait","faire","afin","ainsi","entre","chez","vers","sans","sous","fois","ans","jours",
         # English
         "the","a","an","and","or","of","to","in","on","for","from","by","as","is","are","be","been","this","that","these","those","it","its","at","we","you","they","our","your","their","will","can","may","more","most","less","very","good","strong","ability","skills","experience","experiences",
+        # Job boilerplate FR
+        "vous","nous","poste","profil","mission","missions","client","clients","candidat","candidature","recherche","recherchons","souhaitez","justifiez","intervenez","assurer","assurez","realiser","realisez","participer","participerez","selon","niveau","horaire","horaires","cdi","cdd","interim","h/f","hf","de","d'","l'","au","aux","ans","mois","semaine","jour","jours","souhait","souhaite","souhaitees","souhaitees","souhaitee","souhaitez",
+        # Job boilerplate EN
+        "position","role","responsibilities","responsibility","requirements","apply","applicant","candidate","team","work","working","ensure","ensuring","perform","performing","according","based","within","environment",
     ]
 )
 
@@ -29,28 +33,36 @@ def normalize_text(text: str) -> str:
     t = re.sub(r"\bmove\s*it\s*2?\b", "moveit", t)
     t = re.sub(r"\btia\s*portal\b", "tia portal", t)
     t = re.sub(r"\btwin\s*cat\b", "twincat", t)
-    t = t.replace("c\+\+", "c++")
+    t = re.sub(r"c\+\+", "c++", t)
     return t
 
 
-def tokenize(text: str, *, keep: Iterable[str] | None = None) -> List[str]:
+def build_stopwords(extra: Iterable[str] | None = None) -> set[str]:
+    base = set(STOPWORDS_FR_EN)
+    if extra:
+        for w in extra:
+            if not w:
+                continue
+            base.add(normalize_text(w))
+    return base
+
+
+def tokenize(text: str, *, keep: Iterable[str] | None = None, extra_stops: Iterable[str] | None = None) -> List[str]:
     t = normalize_text(text)
     toks = _RE_TOKEN.findall(t)
     out: List[str] = []
     keep_set = set(keep or [])
+    stops = build_stopwords(extra_stops)
     for tok in toks:
         if tok in keep_set:
             out.append(tok)
             continue
-        if tok in STOPWORDS_FR_EN:
+        if tok in stops:
             continue
         if len(tok) <= 1:
             continue
         if tok.isdigit():
             continue
-        # naive plural trim
-        if len(tok) > 5 and tok.endswith("s"):
-            tok = tok[:-1]
         out.append(tok)
     return out
 
@@ -91,4 +103,3 @@ def log_odds_with_prior(
     # sort by z desc
     out.sort(key=lambda x: x[1], reverse=True)
     return out
-

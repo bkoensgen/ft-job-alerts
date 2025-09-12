@@ -79,6 +79,9 @@ Semantic-ish stats (automatic discovery)
 - Save CSVs:
   - `python run.py nlp-stats --days 31 --top 60 --outfile-tokens data/out/tokens.csv --outfile-bigrams data/out/bigrams.csv`
 - Tip: fill the DB broadly first (use `sweep`) for better signal.
+- Noise control:
+  - Prune ubiquitous/rare terms: `--min-df 0.005 --max-df 0.4` (defaults).
+  - Add custom stopwords: `--stop-add "poste;profil;mission;client;vous;h/f;cdi;interim"`.
 
 Broaden results (keyword sweep)
 - Run several fetches (they merge in DB):
