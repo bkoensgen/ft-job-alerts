@@ -111,6 +111,15 @@ def cmd_fetch(args):
     if distance_km is not None and not commune:
         print("[warn] --distance-km/--radius-km est ignoré si --commune n'est pas fourni (API FT)")
 
+    # Normalize publieeDepuis to allowed values (1,3,7,14,31)
+    pdays = args.published_since_days
+    if pdays is not None:
+        allowed = [1, 3, 7, 14, 31]
+        if pdays not in allowed:
+            nearest = min(allowed, key=lambda x: abs(x - pdays))
+            print(f"[warn] publieeDepuis={pdays} non supporté; utilisation de {nearest} (valeurs permises: 1,3,7,14,31)")
+            pdays = nearest
+
     raw = client.search(
         keywords=keywords,
         departements=departements,
@@ -120,7 +129,7 @@ def cmd_fetch(args):
         limit=args.limit,
         page=args.page,
         sort=args.sort,
-        published_since_days=args.published_since_days,
+        published_since_days=pdays,
     )
 
     # Filter + score
@@ -295,7 +304,7 @@ def build_parser() -> argparse.ArgumentParser:
     s_fetch.add_argument("--sort", type=int, choices=[0, 1, 2], default=1,
                          help="0=pertinence/date, 1=date/pertinence, 2=distance/pertinence")
     s_fetch.add_argument("--published-since-days", dest="published_since_days", type=int, default=None,
-                         help="Only offers published since N days (if supported by API)")
+                         help="Only offers published since N days (allowed: 1,3,7,14,31)")
     s_fetch.set_defaults(func=cmd_fetch)
 
     s_run = sub.add_parser("run-daily", help="Fetch + notify new and follow-ups")
@@ -309,7 +318,8 @@ def build_parser() -> argparse.ArgumentParser:
     s_run.add_argument("--limit", type=int, default=50)
     s_run.add_argument("--page", type=int, default=0)
     s_run.add_argument("--sort", type=int, choices=[0, 1, 2], default=1)
-    s_run.add_argument("--published-since-days", dest="published_since_days", type=int, default=1)
+    s_run.add_argument("--published-since-days", dest="published_since_days", type=int, default=1,
+                       help="Allowed values: 1,3,7,14,31 (auto-snap to nearest)")
     s_run.set_defaults(func=cmd_run_daily)
 
     s_export = sub.add_parser("export", help="Export offers (txt/csv/md/jsonl) for analysis")

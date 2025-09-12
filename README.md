@@ -92,6 +92,7 @@ Search tips (Offres v2)
 - Or use `--dept 68,67` for department filters (no radius).
 - Sorting: `--sort 0|1|2` where 1=date desc (default), 0=pertinence/date, 2=distance/pertinence.
 - Pagination: `--page P` and `--limit L` map to `range=P*L-(P*L+L-1)` (L max 150).
+- `publieeDepuis` (days): allowed values are 1, 3, 7, 14, 31. The CLI auto-snaps invalid values to the nearest allowed.
 - Debugging 400:
   - Set `FT_DEBUG=1` to print the request URL.
   - If needed, set `FT_RANGE_HEADER=1` to send `Range: start-end` header instead of `range` query.
