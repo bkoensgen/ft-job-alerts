@@ -291,6 +291,92 @@ def cmd_sweep(args):
     print(f"Sweep complete. Inserted/updated approx: {total_prepared}")
 
 
+def cmd_stats(args):
+    import re, csv, sys
+    # Load rows
+    rows = query_offers(
+        days=args.days,
+        from_date=args.from_date,
+        to_date=args.to_date,
+        status=args.status,
+        min_score=args.min_score,
+        limit=args.limit,
+        order_by="date_desc",
+    )
+
+    tokens = [t.strip() for t in str(args.keywords_list).split(";") if t.strip()]
+    patterns = []
+    for t in tokens:
+        if args.mode == "regex":
+            pat = re.compile(t, flags=re.IGNORECASE)
+        else:
+            # smart word boundary: if alnum only, wrap with \b; otherwise use escaped token
+            if re.fullmatch(r"[A-Za-z0-9]+", t):
+                pat = re.compile(rf"\b{re.escape(t)}\b", flags=re.IGNORECASE)
+            else:
+                pat = re.compile(re.escape(t), flags=re.IGNORECASE)
+        patterns.append((t, pat))
+
+    def count_in_text(pat: re.Pattern, text: str) -> int:
+        return len(pat.findall(text))
+
+    # Aggregate
+    global_counts = {t: {"offers": 0, "occurrences": 0} for t in tokens}
+    by_dept: dict[str, dict[str, dict[str, int]]] = {}
+    for r in rows:
+        d = {k: r[k] for k in r.keys()}
+        text = (d.get("title") or "") + "\n" + (d.get("description") or "")
+        dept = d.get("department") or ""
+        for t, pat in patterns:
+            occ = count_in_text(pat, text)
+            if occ > 0:
+                global_counts[t]["offers"] += 1
+                global_counts[t]["occurrences"] += occ
+                if args.group_by == "dept":
+                    grp = by_dept.setdefault(dept, {})
+                    ctr = grp.setdefault(t, {"offers": 0, "occurrences": 0})
+                    ctr["offers"] += 1
+                    ctr["occurrences"] += occ
+
+    # Output
+    if args.outfile:
+        with open(args.outfile, "w", encoding="utf-8", newline="") as f:
+            w = csv.writer(f)
+            if args.group_by == "dept":
+                w.writerow(["department", "token", "offers", "occurrences"]) 
+                for dept, data in sorted(by_dept.items()):
+                    items = list(data.items())
+                    items.sort(key=lambda kv: kv[1][args.sort_by], reverse=True)
+                    for t, ctr in items:
+                        w.writerow([dept, t, ctr["offers"], ctr["occurrences"]])
+            else:
+                w.writerow(["token", "offers", "occurrences"]) 
+                items = list(global_counts.items())
+                items.sort(key=lambda kv: kv[1][args.sort_by], reverse=True)
+                for t, ctr in items:
+                    w.writerow([t, ctr["offers"], ctr["occurrences"]])
+        print(f"Stats written to {args.outfile}")
+    else:
+        def print_table(rows_list):
+            # simple columns aligned
+            col_widths = [max(len(str(x)) for x in col) for col in zip(*rows_list)]
+            for row in rows_list:
+                print("  ".join(str(x).ljust(w) for x, w in zip(row, col_widths)))
+
+        if args.group_by == "dept":
+            for dept in sorted(by_dept.keys()):
+                print(f"\nDepartment: {dept or '-'}")
+                items = list(by_dept[dept].items())
+                items.sort(key=lambda kv: kv[1][args.sort_by], reverse=True)
+                table = [("token", "offers", "occurrences")] + [(t, ctr["offers"], ctr["occurrences"]) for t, ctr in items]
+                print_table(table)
+        else:
+            items = list(global_counts.items())
+            items.sort(key=lambda kv: kv[1][args.sort_by], reverse=True)
+            table = [("token", "offers", "occurrences")] + [(t, ctr["offers"], ctr["occurrences"]) for t, ctr in items]
+            print_table(table)
+
+
 def extract_detail_fields(detail: dict[str, Any]) -> dict[str, Any]:
     # Be tolerant to varying schemas; keep the essentials.
     def _get(d: dict, path: list[str], default=None):
@@ -467,6 +553,22 @@ def build_parser() -> argparse.ArgumentParser:
     s_sweep.add_argument("--sort", type=int, choices=[0,1,2], default=1)
     s_sweep.add_argument("--published-since-days", dest="published_since_days", type=int, default=31)
     s_sweep.set_defaults(func=cmd_sweep)
+
+    s_stats = sub.add_parser("stats", help="Compute keyword stats over offers")
+    s_stats.add_argument("--keywords-list", required=True,
+                         help="Semicolon-separated keywords to count (e.g., 'ros2;ros;robotique;c++')")
+    s_stats.add_argument("--mode", choices=["word", "regex"], default="word",
+                         help="word: smart word-boundary; regex: raw regex patterns")
+    s_stats.add_argument("--group-by", choices=["none", "dept"], default="none")
+    s_stats.add_argument("--days", type=int, default=None)
+    s_stats.add_argument("--from", dest="from_date", default=None)
+    s_stats.add_argument("--to", dest="to_date", default=None)
+    s_stats.add_argument("--status", default=None)
+    s_stats.add_argument("--min-score", dest="min_score", type=float, default=None)
+    s_stats.add_argument("--limit", type=int, default=100000)
+    s_stats.add_argument("--outfile", default=None, help="Write CSV if provided; otherwise print")
+    s_stats.add_argument("--sort-by", choices=["offers", "occurrences"], default="offers")
+    s_stats.set_defaults(func=cmd_stats)
 
     return p
 

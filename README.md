@@ -67,6 +67,12 @@ Most useful commands
   - `python run.py export --format csv --days 31 --outfile data/out/offres.csv`
   - `python run.py export --format jsonl --days 31 --outfile data/out/offres.jsonl`
 
+Keyword stats
+- Global stats on given keywords over the current selection (last 31 days here):
+  - `python run.py stats --keywords-list "ros2;ros;robotique;automatisme;vision;opencv;slam;moveit;gazebo;c++" --days 31`
+  - Add per-department breakdown: `--group-by dept`
+  - Save to CSV: `--outfile data/out/keyword-stats.csv`
+
 Broaden results (keyword sweep)
 - Run several fetches (they merge in DB):
   - `robotique`, `robot`, `ROS`, `automatisme`, `automatisation`, `cobot`, `vision`, `AGV`, `AMR`
