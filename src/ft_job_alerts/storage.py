@@ -161,3 +161,58 @@ def mark_notified(offer_ids: list[str]) -> None:
     )
     con.commit()
     con.close()
+
+
+def query_offers(
+    *,
+    days: int | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    status: str | None = None,
+    min_score: float | None = None,
+    limit: int = 100,
+    order_by: str = "score_desc",
+) -> list[sqlite3.Row]:
+    con = connect()
+    cur = con.cursor()
+    where = []
+    params: list[Any] = []
+
+    # We filter on inserted_at (UTC ISO string) for recency; can be swapped for published_at if desired.
+    if days is not None:
+        start = (dt.datetime.utcnow() - dt.timedelta(days=days)).isoformat()
+        where.append("inserted_at >= ?")
+        params.append(start)
+    if from_date:
+        where.append("inserted_at >= ?")
+        params.append(from_date)
+    if to_date:
+        # add one day to include the whole day when only a date is provided
+        if len(to_date) == 10:
+            to_dt = dt.datetime.fromisoformat(to_date) + dt.timedelta(days=1)
+            where.append("inserted_at < ?")
+            params.append(to_dt.isoformat())
+        else:
+            where.append("inserted_at <= ?")
+            params.append(to_date)
+    if status:
+        where.append("status = ?")
+        params.append(status)
+    if min_score is not None:
+        where.append("score >= ?")
+        params.append(float(min_score))
+
+    order_sql = {
+        "score_desc": "score DESC, inserted_at DESC",
+        "date_desc": "inserted_at DESC, score DESC",
+    }.get(order_by, "score DESC, inserted_at DESC")
+
+    sql = "SELECT * FROM offers"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += f" ORDER BY {order_sql} LIMIT ?"
+    params.append(int(limit))
+    cur.execute(sql, params)
+    rows = cur.fetchall()
+    con.close()
+    return rows

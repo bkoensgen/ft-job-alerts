@@ -1,11 +1,11 @@
-ft-job-alerts — France Travail job alerts (robotics/ROS2)
+ft-job-alerts — France Travail job extraction (robotics/ROS2)
 
 Overview
 - Automates daily retrieval, filtering, scoring, and notification of job offers for a junior robotics profile (ROS 2 / C++ / vision), locally (68) and France-wide.
 - Stores offers in SQLite, tracks applications, and schedules follow-ups (J+5 / J+12).
 
 What’s included
-- Minimal Python pipeline (stdlib only): OAuth client (stub), Offres d’emploi v2 client (stub + simulate mode), filters, scoring, SQLite storage, notifier (email or file/console), and a CLI.
+- Minimal Python pipeline (stdlib only): OAuth client (stub), Offres d’emploi v2 client (stub + simulate mode), filters, scoring, SQLite storage, exporter (txt/csv/md), optional notifier, and a CLI.
 - A sample dataset for offline testing (no network required).
 
 Quick start
@@ -15,15 +15,16 @@ Quick start
 
 2) Initialize DB and run once in simulate mode (no install needed):
    - python run.py init-db
-   - python run.py run-daily --keywords "ros2,c++,vision" --dept 68 --radius-km 50
+   - python run.py fetch --keywords "ros2,c++,vision" --dept 68 --radius-km 50
+   - python run.py export --format txt --days 7 --top 50  # write under data/out/
 
 3) Inspect output
    - SQLite DB at data/ft_jobs.db
    - Notifications written under data/out/ (in simulate mode without SMTP config)
 
-Daily usage (cron/systemd)
-- Run: python run.py run-daily --keywords "ros2,c++,vision" --dept 68 --radius-km 50
-- This will: fetch (or simulate), filter/score, store new offers, and send a summary notification. It will also include due follow-ups (J+5/J+12) if you’ve marked offers as applied.
+Daily usage (optional)
+- Export is primary. For background runs: `python run.py run-daily --keywords "ros2,c++,vision" --dept 68 --radius-km 50`.
+- Daily run does: fetch (or simulate), filter/score, store new offers, and optionally send a summary notification. It also includes due follow-ups (J+5/J+12) if you’ve marked offers as applied.
 
 Follow-ups
 - Mark an offer as applied:
@@ -48,6 +49,19 @@ Endpoints (defaults — verify with current docs)
 Notes
 - Network calls are disabled in this environment; simulate mode provides realistic flow. Replace simulate with real endpoints once credentials are set.
 - ROME 4.0 and La Bonne Boîte clients are stubbed for now; provide codes via CLI/env, or later plug real APIs.
+
+Export usage (analysis-friendly)
+- Export last 7 days, top 50 by score to TXT:
+  - `python run.py export --format txt --days 7 --top 50`
+- Export to CSV for spreadsheets:
+  - `python run.py export --format csv --days 14 --outfile data/out/offres.csv`
+- Export to Markdown (copy/paste into GPT):
+  - `python run.py export --format md --days 7 --min-score 2.0 --top 30`
+
+Filtering flags
+- `--days N` (relative window on inserted_at) or `--from 2025-09-01 --to 2025-09-12`
+- `--status new|applied|rejected|to_follow` (optional)
+- `--min-score FLOAT` and `--top N`
 
 Enabling real API calls (when ready)
 - Set `FT_API_SIMULATE=0`, and set `FT_CLIENT_ID` and `FT_CLIENT_SECRET` in your environment (don’t commit them).

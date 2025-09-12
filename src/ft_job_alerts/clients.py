@@ -17,7 +17,7 @@ class OffresEmploiClient:
         self.auth = auth
 
     def search(self, *, keywords: list[str], dept: str | None = None, radius_km: int | None = None,
-               rome_codes: list[str] | None = None, limit: int = 50) -> list[dict[str, Any]]:
+               rome_codes: list[str] | None = None, limit: int = 50, published_since_days: int | None = None) -> list[dict[str, Any]]:
         if self.cfg.api_simulate:
             return self._load_sample()
 
@@ -33,6 +33,9 @@ class OffresEmploiClient:
         if rome_codes:
             params["codeROME"] = ",".join(rome_codes)
         params["limit"] = min(max(int(limit), 1), 150)
+        if published_since_days is not None:
+            # Common parameter name in some FT APIs, verify with docs
+            params["publieeDepuis"] = int(published_since_days)
 
         url = f"{self.cfg.offres_search_url}?{urllib.parse.urlencode(params)}"
         token = self.auth.get_token()
@@ -87,4 +90,3 @@ class LBBClient:
     def top_companies(self, *, rome_codes: list[str], dept: str, limit: int = 20) -> list[dict[str, Any]]:
         # Stub: return an empty list in simulate mode; integrate later with real API
         return []
-

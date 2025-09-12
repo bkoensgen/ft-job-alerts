@@ -10,7 +10,8 @@ from .config import load_config
 from .filters import is_relevant
 from .notifier import format_offers, notify
 from .scoring import score_offer
-from .storage import due_followups, init_db, recent_new_offers, upsert_offers, mark_notified
+from .storage import due_followups, init_db, recent_new_offers, upsert_offers, mark_notified, query_offers
+from .exporter import export_txt, export_md, export_csv
 
 
 def normalize_offer(o: dict[str, Any]) -> dict[str, Any]:
@@ -81,6 +82,7 @@ def cmd_fetch(args):
         radius_km=args.radius_km or cfg.default_radius_km,
         rome_codes=rome_codes,
         limit=args.limit,
+        published_since_days=args.published_since_days,
     )
 
     # Filter + score
@@ -122,6 +124,26 @@ def cmd_run_daily(args):
         mark_notified([r["offer_id"] for r in new_rows])
 
 
+def cmd_export(args):
+    # Query rows based on filters, export in chosen format
+    rows = query_offers(
+        days=args.days,
+        from_date=args.from_date,
+        to_date=args.to_date,
+        status=args.status,
+        min_score=args.min_score,
+        limit=args.limit,
+        order_by="score_desc",
+    )
+    if args.format == "txt":
+        path = export_txt(rows, args.outfile)
+    elif args.format == "md":
+        path = export_md(rows, args.outfile)
+    else:
+        path = export_csv(rows, args.outfile)
+    print(f"Exported {len(rows)} rows to {path}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="ft-job-alerts", description="France Travail job alerts pipeline")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -141,6 +163,8 @@ def build_parser() -> argparse.ArgumentParser:
     s_fetch.add_argument("--dept", default=None, help="Departement code (e.g., 68)")
     s_fetch.add_argument("--radius-km", type=int, default=None, help="Search radius in km")
     s_fetch.add_argument("--limit", type=int, default=50)
+    s_fetch.add_argument("--published-since-days", dest="published_since_days", type=int, default=None,
+                         help="Only offers published since N days (if supported by API)")
     s_fetch.set_defaults(func=cmd_fetch)
 
     s_run = sub.add_parser("run-daily", help="Fetch + notify new and follow-ups")
@@ -150,7 +174,19 @@ def build_parser() -> argparse.ArgumentParser:
     s_run.add_argument("--dept", default=None)
     s_run.add_argument("--radius-km", type=int, default=None)
     s_run.add_argument("--limit", type=int, default=50)
+    s_run.add_argument("--published-since-days", dest="published_since_days", type=int, default=1)
     s_run.set_defaults(func=cmd_run_daily)
+
+    s_export = sub.add_parser("export", help="Export offers (txt/csv/md) for analysis")
+    s_export.add_argument("--format", choices=["txt", "csv", "md"], default="txt")
+    s_export.add_argument("--days", type=int, default=None, help="Window on inserted_at (last N days)")
+    s_export.add_argument("--from", dest="from_date", default=None, help="From date YYYY-MM-DD (inserted_at)")
+    s_export.add_argument("--to", dest="to_date", default=None, help="To date YYYY-MM-DD (inserted_at)")
+    s_export.add_argument("--status", default=None, help="Filter by status (new,applied,rejected,to_follow)")
+    s_export.add_argument("--min-score", dest="min_score", type=float, default=None)
+    s_export.add_argument("--top", dest="limit", type=int, default=100)
+    s_export.add_argument("--outfile", default=None, help="Output path; defaults to data/out/…")
+    s_export.set_defaults(func=cmd_export)
 
     return p
 
