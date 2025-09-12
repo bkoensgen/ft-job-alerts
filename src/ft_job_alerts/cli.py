@@ -533,21 +533,6 @@ def cmd_charts(args):
     build_charts(rows, args.outdir, require_mpl=bool(args.require_mpl))
     print("[charts] Done.")
 
-    if args.outfile_bigrams:
-        import csv
-        with open(args.outfile_bigrams, "w", encoding="utf-8", newline="") as f:
-            w = csv.writer(f)
-            w.writerow(["bigram","count_in_core","z_score"])
-            for t, c, z in bigr_top:
-                w.writerow([t, c, z])
-        print(f"Bigrams written to {args.outfile_bigrams}")
-    else:
-        print("\nTop bigrams (core vs other):")
-        rows_tbl = [("bigram","count","z")] + bigr_top
-        colw = [max(len(str(x)) for x in col) for col in zip(*rows_tbl)]
-        for row in rows_tbl:
-            print("  ".join(str(x).ljust(w) for x, w in zip(row, colw)))
-
 
 def extract_detail_fields(detail: dict[str, Any]) -> dict[str, Any]:
     # Be tolerant to varying schemas; keep the essentials.
