@@ -11,7 +11,7 @@ from .filters import is_relevant
 from .notifier import format_offers, notify
 from .scoring import score_offer
 from .storage import due_followups, init_db, recent_new_offers, upsert_offers, mark_notified, query_offers
-from .exporter import export_txt, export_md, export_csv
+from .exporter import export_txt, export_md, export_csv, export_jsonl
 
 
 def normalize_offer(o: dict[str, Any]) -> dict[str, Any]:
@@ -19,18 +19,27 @@ def normalize_offer(o: dict[str, Any]) -> dict[str, Any]:
     oid = str(o.get("id") or o.get("offerId") or o.get("reference") or o.get("idOffre") or "")
     title = o.get("intitule") or o.get("title") or ""
     company = (o.get("entreprise") or {}).get("nom") if isinstance(o.get("entreprise"), dict) else (o.get("company") or "")
+    city = ""
+    department = ""
+    postal_code = ""
+    latitude = None
+    longitude = None
     location = None
     if isinstance(o.get("lieuTravail"), dict):
         lt = o["lieuTravail"]
         city = lt.get("libelle") or lt.get("ville") or ""
-        dept = lt.get("departement") or lt.get("codePostal", "")[:2]
-        location = f"{city} ({dept})".strip()
+        department = lt.get("departement") or lt.get("codePostal", "")[:2]
+        postal_code = lt.get("codePostal") or ""
+        latitude = lt.get("latitude")
+        longitude = lt.get("longitude")
+        location = f"{city} ({department})".strip()
     else:
         location = o.get("location") or ""
 
     contract = o.get("typeContrat") or o.get("contractType") or ""
     published = o.get("dateCreation") or o.get("publishedAt") or o.get("publication") or ""
     url = o.get("origineOffre", {}).get("url") if isinstance(o.get("origineOffre"), dict) else (o.get("url") or "")
+    apply_url = o.get("lienPostuler") or url
     salary = o.get("salaire", {}).get("libelle") if isinstance(o.get("salaire"), dict) else (o.get("salary") or "")
     description = o.get("description") or ""
 
@@ -42,8 +51,14 @@ def normalize_offer(o: dict[str, Any]) -> dict[str, Any]:
         "contract_type": contract or "",
         "published_at": published or "",
         "url": url or "",
+        "apply_url": apply_url or "",
         "salary": salary or "",
         "description": description or "",
+        "city": city or "",
+        "department": department or "",
+        "postal_code": postal_code or "",
+        "latitude": latitude,
+        "longitude": longitude,
         # filled later
         "rome_codes": [],
         "keywords": [],
@@ -98,6 +113,11 @@ def cmd_fetch(args):
         n["rome_codes"] = rome_codes
         n["keywords"] = keywords
         n["score"] = score_offer(r, base_lat=base_lat, base_lon=base_lon)
+        try:
+            import json as _json
+            n["raw_json"] = _json.dumps(r, ensure_ascii=False)
+        except Exception:
+            n["raw_json"] = None
         prepared.append(n)
 
     inserted = upsert_offers(prepared)
@@ -136,11 +156,13 @@ def cmd_export(args):
         order_by="score_desc",
     )
     if args.format == "txt":
-        path = export_txt(rows, args.outfile)
+        path = export_txt(rows, args.outfile, desc_chars=args.desc_chars)
     elif args.format == "md":
-        path = export_md(rows, args.outfile)
-    else:
+        path = export_md(rows, args.outfile, desc_chars=args.desc_chars)
+    elif args.format == "csv":
         path = export_csv(rows, args.outfile)
+    else:
+        path = export_jsonl(rows, args.outfile)
     print(f"Exported {len(rows)} rows to {path}")
 
 
@@ -177,8 +199,8 @@ def build_parser() -> argparse.ArgumentParser:
     s_run.add_argument("--published-since-days", dest="published_since_days", type=int, default=1)
     s_run.set_defaults(func=cmd_run_daily)
 
-    s_export = sub.add_parser("export", help="Export offers (txt/csv/md) for analysis")
-    s_export.add_argument("--format", choices=["txt", "csv", "md"], default="txt")
+    s_export = sub.add_parser("export", help="Export offers (txt/csv/md/jsonl) for analysis")
+    s_export.add_argument("--format", choices=["txt", "csv", "md", "jsonl"], default="txt")
     s_export.add_argument("--days", type=int, default=None, help="Window on inserted_at (last N days)")
     s_export.add_argument("--from", dest="from_date", default=None, help="From date YYYY-MM-DD (inserted_at)")
     s_export.add_argument("--to", dest="to_date", default=None, help="To date YYYY-MM-DD (inserted_at)")
@@ -186,6 +208,8 @@ def build_parser() -> argparse.ArgumentParser:
     s_export.add_argument("--min-score", dest="min_score", type=float, default=None)
     s_export.add_argument("--top", dest="limit", type=int, default=100)
     s_export.add_argument("--outfile", default=None, help="Output path; defaults to data/out/…")
+    s_export.add_argument("--desc-chars", dest="desc_chars", type=int, default=400,
+                         help="Include description truncated to N chars (0 to omit)")
     s_export.set_defaults(func=cmd_export)
 
     return p

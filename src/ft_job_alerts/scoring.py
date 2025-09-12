@@ -39,8 +39,14 @@ def score_offer(offer: dict[str, Any], *, base_lat: float | None = None, base_lo
 
     # Distance bonus if coordinates present and base provided
     if base_lat is not None and base_lon is not None:
-        lat = offer.get("lieuTravail", {}).get("latitude")
-        lon = offer.get("lieuTravail", {}).get("longitude")
+        lat = None
+        lon = None
+        if isinstance(offer.get("lieuTravail"), dict):
+            lat = offer.get("lieuTravail", {}).get("latitude")
+            lon = offer.get("lieuTravail", {}).get("longitude")
+        # If already normalized
+        lat = offer.get("latitude", lat)
+        lon = offer.get("longitude", lon)
         if lat is not None and lon is not None:
             d = haversine_km(float(base_lat), float(base_lon), float(lat), float(lon))
             if d <= 20:
@@ -59,4 +65,3 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     dlambda = math.radians(lon2 - lon1)
     a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlambda / 2) ** 2
     return 2 * R * math.asin(math.sqrt(a))
-

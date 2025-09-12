@@ -32,27 +32,57 @@ def init_db() -> None:
             title TEXT,
             company TEXT,
             location TEXT,
+            city TEXT,
+            department TEXT,
+            postal_code TEXT,
+            latitude REAL,
+            longitude REAL,
+            description TEXT,
             rome_codes TEXT,
             keywords TEXT,
             contract_type TEXT,
             published_at TEXT,
             source TEXT,
             url TEXT,
+            apply_url TEXT,
             salary TEXT,
             score REAL DEFAULT 0,
             inserted_at TEXT,
             status TEXT DEFAULT 'new',
             followup1_due TEXT,
             followup2_due TEXT,
-            last_notified_at TEXT
+            last_notified_at TEXT,
+            raw_json TEXT
         );
 
         CREATE INDEX IF NOT EXISTS idx_offers_status ON offers(status);
         CREATE INDEX IF NOT EXISTS idx_offers_published_at ON offers(published_at);
         """
     )
+    # Migrations for older DBs: add columns if missing
+    ensure_offer_columns(cur)
     con.commit()
     con.close()
+
+
+def ensure_offer_columns(cur: sqlite3.Cursor) -> None:
+    cur.execute("PRAGMA table_info(offers)")
+    cols = {row[1] for row in cur.fetchall()}
+    def add(col: str, sql_type: str):
+        cur.execute(f"ALTER TABLE offers ADD COLUMN {col} {sql_type}")
+    wanted = {
+        "city": "TEXT",
+        "department": "TEXT",
+        "postal_code": "TEXT",
+        "latitude": "REAL",
+        "longitude": "REAL",
+        "description": "TEXT",
+        "apply_url": "TEXT",
+        "raw_json": "TEXT",
+    }
+    for name, typ in wanted.items():
+        if name not in cols:
+            add(name, typ)
 
 
 def upsert_offers(offers: Iterable[dict[str, Any]]) -> int:
@@ -64,14 +94,26 @@ def upsert_offers(offers: Iterable[dict[str, Any]]) -> int:
         cur.execute(
             """
             INSERT INTO offers (
-                offer_id, title, company, location, rome_codes, keywords,
-                contract_type, published_at, source, url, salary, score, inserted_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                offer_id, title, company, location,
+                city, department, postal_code, latitude, longitude,
+                description, rome_codes, keywords,
+                contract_type, published_at, source, url, apply_url, salary,
+                score, inserted_at, raw_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(offer_id) DO UPDATE SET
                 score=excluded.score,
                 title=excluded.title,
                 company=excluded.company,
-                location=excluded.location
+                location=excluded.location,
+                city=excluded.city,
+                department=excluded.department,
+                postal_code=excluded.postal_code,
+                latitude=excluded.latitude,
+                longitude=excluded.longitude,
+                description=excluded.description,
+                url=excluded.url,
+                apply_url=excluded.apply_url,
+                salary=excluded.salary
             ;
             """,
             (
@@ -79,15 +121,23 @@ def upsert_offers(offers: Iterable[dict[str, Any]]) -> int:
                 o.get("title"),
                 o.get("company"),
                 o.get("location"),
+                o.get("city"),
+                o.get("department"),
+                o.get("postal_code"),
+                o.get("latitude"),
+                o.get("longitude"),
+                o.get("description"),
                 ",".join(o.get("rome_codes", [])),
                 ",".join(o.get("keywords", [])),
                 o.get("contract_type"),
                 o.get("published_at"),
                 o.get("source", "offres_v2"),
                 o.get("url"),
+                o.get("apply_url"),
                 o.get("salary"),
                 float(o.get("score", 0)),
                 now,
+                o.get("raw_json"),
             ),
         )
         if cur.rowcount == 1:
