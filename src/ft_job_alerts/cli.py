@@ -487,6 +487,35 @@ def cmd_nlp_stats(args):
         for row in rows_tbl:
             print("  ".join(str(x).ljust(w) for x, w in zip(row, colw)))
 
+
+def cmd_watchlist(args):
+    import csv
+    rows = query_offers(
+        days=args.days,
+        from_date=args.from_date,
+        to_date=args.to_date,
+        status=None,
+        min_score=args.min_score,
+        limit=args.limit,
+        order_by="date_desc",
+    )
+    counts: dict[str, int] = {}
+    depts: dict[str, set] = {}
+    for r in rows:
+        company = (r["company"] or "").strip()
+        if not company:
+            continue
+        counts[company] = counts.get(company, 0) + 1
+        d = (r["department"] or "").strip()
+        depts.setdefault(company, set()).add(d)
+    items = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)
+    with open(args.outfile, "w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["company", "offers", "departments"])
+        for comp, c in items:
+            w.writerow([comp, c, ",".join(sorted(x for x in depts.get(comp, set()) if x))])
+    print(f"Watchlist written to {args.outfile} ({len(items)} companies)")
+
     if args.outfile_bigrams:
         import csv
         with open(args.outfile_bigrams, "w", encoding="utf-8", newline="") as f:
@@ -722,6 +751,18 @@ def cmd_pipeline_weekly(args):
     print("[pipeline] Computing NLP stats…")
     cmd_nlp_stats(nlp)
 
+    # 6) Watchlist companies
+    wargs = Namespace(
+        days=args.published_since_days,
+        from_date=None,
+        to_date=None,
+        min_score=None,
+        limit=50000,
+        outfile="data/out/watchlist_companies.csv",
+    )
+    print("[pipeline] Building company watchlist…")
+    cmd_watchlist(wargs)
+
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="ft-job-alerts", description="France Travail job alerts pipeline")
@@ -893,6 +934,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_week.add_argument("--nlp-outfile-tokens", default="data/out/tokens.csv")
     p_week.add_argument("--nlp-outfile-bigrams", default="data/out/bigrams.csv")
     p_week.set_defaults(func=cmd_pipeline_weekly)
+
+    # Watchlist companies (top by count in window)
+    s_watch = sub.add_parser("watchlist", help="Top companies over a window (writes CSV)")
+    s_watch.add_argument("--days", type=int, default=31)
+    s_watch.add_argument("--from", dest="from_date", default=None)
+    s_watch.add_argument("--to", dest="to_date", default=None)
+    s_watch.add_argument("--min-score", dest="min_score", type=float, default=None)
+    s_watch.add_argument("--limit", type=int, default=50000)
+    s_watch.add_argument("--outfile", default="data/out/watchlist_companies.csv")
+    s_watch.set_defaults(func=cmd_watchlist)
 
     return p
 

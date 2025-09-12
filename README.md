@@ -66,6 +66,7 @@ Most useful commands
 - Export for AI analysis (Markdown, full description):
   - `python run.py export --format md --days 31 --min-score 2.0 --top 200 --desc-chars -1`
   - TXT/MD exports include simple labels and tags (CORE_ROBOTICS, SENIORITY, REMOTE, PLC tags, sensors, adjacent categories).
+  - Extra tags now include ROS stack (ros2, moveit, nav2, tf2, urdf, pcl…), robot brands (Fanuc/KUKA/ABB/Stäubli/UR/Yaskawa…), and vision libs (OpenCV/Halcon/Cognex/Keyence).
 - Export CSV (full fields) and JSONL:
   - `python run.py export --format csv --days 31 --outfile data/out/offres.csv`
   - `python run.py export --format jsonl --days 31 --outfile data/out/offres.jsonl`
@@ -77,12 +78,17 @@ One-shot pipelines
 - Weekly (couverture large), sweep → enrich → export → stats → nlp-stats:
   - `python run.py pipeline weekly --keywords-list "robotique;robot;ros2;ros;automatisme;cobot;vision;ivvq;agv;amr" --published-since-days 31 --limit 100 --max-pages 20 --export-top 300 --desc-chars -1`
   - Produit aussi: `data/out/keyword-stats.csv`, `data/out/tokens.csv`, `data/out/bigrams.csv`
+  - Watchlist companies: `data/out/watchlist_companies.csv`
 
 Keyword stats
 - Global stats on given keywords over the current selection (last 31 days here):
   - `python run.py stats --keywords-list "ros2;ros;robotique;automatisme;vision;opencv;slam;moveit;gazebo;c++" --days 31`
   - Add per-department breakdown: `--group-by dept`
 - Save to CSV: `--outfile data/out/keyword-stats.csv`
+  
+Company watchlist
+- Top companies by number of offers in a time window:
+  - `python run.py watchlist --days 31 --outfile data/out/watchlist_companies.csv`
 
 Semantic-ish stats (automatic discovery)
 - Compute distinctive tokens and bigrams for robotics offers (CORE_ROBOTICS) vs others using log-odds:

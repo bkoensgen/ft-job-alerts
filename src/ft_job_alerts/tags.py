@@ -7,7 +7,7 @@ _RE = re.compile
 
 
 # Core robotics signals
-CORE_PATTERNS = _RE(r"\b(ros2?|robot(?:ique|ics)?|moveit|gazebo|urdf|slam|navigation|opencv|perception)\b", re.I)
+CORE_PATTERNS = _RE(r"\b(ros2?|robot(?:ique|ics)?|move ?it2?|gazebo(?: sim| ignition)?|urdf|xacro|tf2|nav2|navigation2|rclcpp|rclpy|colcon|ament|pcl|slam|navigation|opencv|perception)\b", re.I)
 
 # Adjacent categories with simple keyword patterns
 ADJACENT_MAP: List[Tuple[str, re.Pattern]] = [
@@ -38,6 +38,28 @@ SENSOR_TAGS: List[Tuple[str, re.Pattern]] = [
     ("lidar", _RE(r"\blidar\b", re.I)),
     ("camera", _RE(r"\b(camera|cam[eé]ra|rgbd|rgb-d)\b", re.I)),
     ("imu", _RE(r"\bimu\b", re.I)),
+]
+
+# Vision libraries / vendors
+VISION_LIBS: List[Tuple[str, re.Pattern]] = [
+    ("opencv", _RE(r"\bopencv\b", re.I)),
+    ("halcon", _RE(r"\bhalcon\b", re.I)),
+    ("cognex", _RE(r"\bcognex\b", re.I)),
+    ("keyence", _RE(r"\bkeyence\b", re.I)),
+]
+
+# Robot brands
+ROBOT_BRANDS: List[Tuple[str, re.Pattern]] = [
+    ("fanuc", _RE(r"\bfanuc\b", re.I)),
+    ("abb", _RE(r"\babb\b", re.I)),
+    ("kuka", _RE(r"\bkuka\b", re.I)),
+    ("staubli", _RE(r"\bst[äa]ubli\b", re.I)),
+    ("yaskawa", _RE(r"\byaskawa\b", re.I)),
+    ("universal_robots", _RE(r"\b(universal robots|ur\b)\b", re.I)),
+    ("omron", _RE(r"\bomron\b", re.I)),
+    ("mir", _RE(r"\b(mobile industrial robots|\bmir\b)\b", re.I)),
+    ("clearpath", _RE(r"\bclearpath\b", re.I)),
+    ("doosan", _RE(r"\bdoosan\b", re.I)),
 ]
 
 
@@ -121,6 +143,27 @@ def compute_labels(row: Dict[str, Any]) -> Dict[str, Any]:
     langs = detect_langs(text)
     sensors = detect_sensors(text)
     agency = detect_agency(company, text)
+    # vision libs and brands
+    vis = [tag for tag, pat in VISION_LIBS if _present(text, pat)]
+    brands = [tag for tag, pat in ROBOT_BRANDS if _present(text, pat)]
+    # ros stack tags
+    ros_stack = []
+    for tag, pat in [
+        ("ros2", _RE(r"\bros ?2\b|\bros2\b", re.I)),
+        ("ros1", _RE(r"\bros\b(?!\s?2)", re.I)),
+        ("moveit", _RE(r"\bmove ?it2?\b", re.I)),
+        ("gazebo", _RE(r"\bgazebo(?: sim| ignition)?\b", re.I)),
+        ("nav2", _RE(r"\bnav2|navigation2\b", re.I)),
+        ("tf2", _RE(r"\btf2\b", re.I)),
+        ("urdf", _RE(r"\burdf|xacro\b", re.I)),
+        ("pcl", _RE(r"\bpcl\b", re.I)),
+        ("rclcpp", _RE(r"\brclcpp\b", re.I)),
+        ("rclpy", _RE(r"\brclpy\b", re.I)),
+        ("colcon", _RE(r"\bcolcon\b", re.I)),
+        ("ament", _RE(r"\bament\b", re.I)),
+    ]:
+        if _present(text, pat):
+            ros_stack.append(tag)
 
     return {
         "CORE_ROBOTICS": core,
@@ -131,5 +174,7 @@ def compute_labels(row: Dict[str, Any]) -> Dict[str, Any]:
         "LANG_TAGS": langs,
         "SENSOR_TAGS": sensors,
         "AGENCY": agency,
+        "VISION_LIBS": vis,
+        "ROBOT_BRANDS": brands,
+        "ROS_STACK": ros_stack,
     }
-

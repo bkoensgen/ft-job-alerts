@@ -26,6 +26,11 @@ EXCLUDE = [
     r"\bchauffeur\b",
     r"\bserveur\b",
     r"\blogistique\b",
+    # Hard excludes for non-robotics IT infra
+    r"\bmainframe\b",
+    r"\bz\s?/?os\b",
+    r"\bcobol\b",
+    r"\bandroid\b",
 ]
 
 
@@ -43,4 +48,3 @@ def is_relevant(title: str, description: str | None) -> bool:
     if _match_any(EXCLUDE, text):
         return False
     return True
-

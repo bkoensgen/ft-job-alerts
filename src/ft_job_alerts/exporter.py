@@ -61,6 +61,9 @@ def export_txt(rows, outfile: str | None = None, desc_chars: int | None = 400) -
             f.write(_fmt_list("TAGS_ADJACENT", labels.get("ADJACENT_CATEGORIES")))
             f.write(_fmt_list("LANGS", labels.get("LANG_TAGS")))
             f.write(_fmt_list("SENSORS", labels.get("SENSOR_TAGS")))
+            f.write(_fmt_list("ROS_STACK", labels.get("ROS_STACK")))
+            f.write(_fmt_list("ROBOT_BRANDS", labels.get("ROBOT_BRANDS")))
+            f.write(_fmt_list("VISION_LIBS", labels.get("VISION_LIBS")))
             f.write(f"  SALARY_TEXT: {r.get('salary','')}\n")
             if desc:
                 f.write("  DESCRIPTION:\n")
@@ -104,6 +107,9 @@ def export_md(rows, outfile: str | None = None, desc_chars: int | None = 500) ->
             _md_list("Adjacents", labels.get("ADJACENT_CATEGORIES"))
             _md_list("Langages", labels.get("LANG_TAGS"))
             _md_list("Capteurs", labels.get("SENSOR_TAGS"))
+            _md_list("ROS stack", labels.get("ROS_STACK"))
+            _md_list("Marques robots", labels.get("ROBOT_BRANDS"))
+            _md_list("Vision libs", labels.get("VISION_LIBS"))
             f.write(f"- Salaire: {r.get('salary','')}\n")
             desc = r.get("description") or ""
             if desc_chars == 0:
