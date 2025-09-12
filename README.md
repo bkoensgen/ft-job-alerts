@@ -90,6 +90,13 @@ Company watchlist
 - Top companies by number of offers in a time window:
   - `python run.py watchlist --days 31 --outfile data/out/watchlist_companies.csv`
 
+Charts and dashboards (PNGs + CSVs)
+- Generate charts from the current selection (uses matplotlib if available, else ASCII + CSV):
+  - `python run.py charts --days 31 --outdir data/out/charts`
+- Produces:
+  - Bar charts + CSVs: departments, top companies, contracts, weekly timeline, ROS stack tags, robot brands, vision libs, languages, PLC tags.
+  - If matplotlib isn’t installed, ASCII bar charts are written alongside CSVs.
+
 Semantic-ish stats (automatic discovery)
 - Compute distinctive tokens and bigrams for robotics offers (CORE_ROBOTICS) vs others using log-odds:
   - `python run.py nlp-stats --days 31 --top 40`

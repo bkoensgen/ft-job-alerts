@@ -16,6 +16,7 @@ from .exporter import export_txt, export_md, export_csv, export_jsonl
 from .tags import compute_labels
 from .nlp import tokenize, bigrams, log_odds_with_prior
 from .storage import update_offer_details
+from .charts import build_charts
 
 
 def normalize_offer(o: dict[str, Any]) -> dict[str, Any]:
@@ -516,6 +517,22 @@ def cmd_watchlist(args):
             w.writerow([comp, c, ",".join(sorted(x for x in depts.get(comp, set()) if x))])
     print(f"Watchlist written to {args.outfile} ({len(items)} companies)")
 
+
+def cmd_charts(args):
+    # Load rows and generate charts to outdir
+    rows = query_offers(
+        days=args.days,
+        from_date=args.from_date,
+        to_date=args.to_date,
+        status=args.status,
+        min_score=args.min_score,
+        limit=args.limit,
+        order_by="date_desc",
+    )
+    print(f"[charts] Building charts from {len(rows)} offers → {args.outdir}")
+    build_charts(rows, args.outdir)
+    print("[charts] Done.")
+
     if args.outfile_bigrams:
         import csv
         with open(args.outfile_bigrams, "w", encoding="utf-8", newline="") as f:
@@ -944,6 +961,16 @@ def build_parser() -> argparse.ArgumentParser:
     s_watch.add_argument("--limit", type=int, default=50000)
     s_watch.add_argument("--outfile", default="data/out/watchlist_companies.csv")
     s_watch.set_defaults(func=cmd_watchlist)
+
+    s_charts = sub.add_parser("charts", help="Generate charts (PNGs and CSVs) from current selection")
+    s_charts.add_argument("--days", type=int, default=31)
+    s_charts.add_argument("--from", dest="from_date", default=None)
+    s_charts.add_argument("--to", dest="to_date", default=None)
+    s_charts.add_argument("--status", default=None)
+    s_charts.add_argument("--min-score", dest="min_score", type=float, default=None)
+    s_charts.add_argument("--limit", type=int, default=200000)
+    s_charts.add_argument("--outdir", default="data/out/charts")
+    s_charts.set_defaults(func=cmd_charts)
 
     return p
 
