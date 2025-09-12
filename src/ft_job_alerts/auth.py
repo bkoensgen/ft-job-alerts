@@ -42,8 +42,9 @@ class AuthClient:
         # Build payload according to FT partner OAuth requirements.
         # Most habilitations require a scope like: "application_{client_id} api_offresdemploiv2"
         scope = self.cfg.oauth_scope
-        if not scope and self.cfg.client_id:
-            scope = f"application_{self.cfg.client_id} api_offresdemploiv2 o2dsoffre"
+        if not scope:
+            # According to Offres v2 OpenAPI, accepted scopes include these two.
+            scope = "api_offresdemploiv2 o2dsoffre"
         payload = {
             "grant_type": "client_credentials",
             "client_id": self.cfg.client_id,
@@ -54,9 +55,10 @@ class AuthClient:
             payload["audience"] = self.cfg.oauth_audience
         data = urllib.parse.urlencode(payload).encode("utf-8")
         req = urllib.request.Request(self.cfg.auth_url, data=data)
-        # Some auth endpoints require Basic auth; left here for completeness
-        basic = base64.b64encode(f"{self.cfg.client_id}:{self.cfg.client_secret}".encode()).decode()
-        req.add_header("Authorization", f"Basic {basic}")
+        # Some auth endpoints require Basic auth. Make it configurable.
+        if self.cfg.oauth_use_basic:
+            basic = base64.b64encode(f"{self.cfg.client_id}:{self.cfg.client_secret}".encode()).decode()
+            req.add_header("Authorization", f"Basic {basic}")
         req.add_header("Content-Type", "application/x-www-form-urlencoded")
 
         try:

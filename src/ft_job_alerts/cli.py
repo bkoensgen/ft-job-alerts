@@ -327,13 +327,31 @@ def build_parser() -> argparse.ArgumentParser:
     s_enrich.add_argument("--sleep-ms", type=int, default=250, help="Delay between calls (rate limit)")
     s_enrich.set_defaults(func=cmd_enrich)
 
+    s_auth = sub.add_parser("auth-check", help="Check OAuth config and attempt to fetch a token (redacted output)")
+    s_auth.set_defaults(func=cmd_auth_check)
+
     return p
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
+    # Dispatch including auth-check defined below
     args.func(args)
+
+
+def cmd_auth_check(_args):
+    cfg = load_config()
+    redacted_id = (cfg.client_id[:6] + "…" + cfg.client_id[-4:]) if cfg.client_id else None
+    print("Auth endpoint:", cfg.auth_url)
+    print("Client ID:", redacted_id)
+    print("Use Basic:", cfg.oauth_use_basic)
+    print("Scope:", cfg.oauth_scope or "api_offresdemploiv2 o2dsoffre (default)")
+    try:
+        token = AuthClient(cfg).get_token()
+        print("Token OK (length):", len(token))
+    except Exception as e:
+        print("Auth error:", e)
 
 
 if __name__ == "__main__":
