@@ -39,7 +39,11 @@ def normalize_offer(o: dict[str, Any]) -> dict[str, Any]:
 
     contract = o.get("typeContrat") or o.get("contractType") or ""
     published = o.get("dateCreation") or o.get("publishedAt") or o.get("publication") or ""
-    url = o.get("origineOffre", {}).get("url") if isinstance(o.get("origineOffre"), dict) else (o.get("url") or "")
+    url = None
+    if isinstance(o.get("origineOffre"), dict):
+        url = o["origineOffre"].get("urlOrigine") or o["origineOffre"].get("url")
+    if not url:
+        url = o.get("url") or ""
     apply_url = o.get("lienPostuler") or url
     salary = o.get("salaire", {}).get("libelle") if isinstance(o.get("salaire"), dict) else (o.get("salary") or "")
     description = o.get("description") or ""
@@ -51,7 +55,8 @@ def normalize_offer(o: dict[str, Any]) -> dict[str, Any]:
         "location": location or "",
         "contract_type": contract or "",
         "published_at": published or "",
-        "url": url or "",
+        # Fallback to candidate site detail page if URL missing
+        "url": (url or (f"https://candidat.francetravail.fr/offres/recherche/detail/{oid}" if oid else "")),
         "apply_url": apply_url or "",
         "salary": salary or "",
         "description": description or "",
@@ -198,19 +203,27 @@ def extract_detail_fields(detail: dict[str, Any]) -> dict[str, Any]:
     # Try various keys that may contain an application URL
     apply_url = (
         detail.get("lienPostuler")
-        or _get(detail, ["contact", "urlCandidature"])  # example in some schemas
-        or _get(detail, ["origineOffre", "url"])
+        or _get(detail, ["contact", "urlPostulation"])  # per OpenAPI Contact schema
+        or _get(detail, ["origineOffre", "urlOrigine"])  # partner/original URL
+        or _get(detail, ["origineOffre", "url"])  # fallback if present
         or detail.get("url")
         or ""
     )
-    url = _get(detail, ["origineOffre", "url"]) or detail.get("url") or ""
+    url = (
+        _get(detail, ["origineOffre", "urlOrigine"]) 
+        or _get(detail, ["origineOffre", "url"]) 
+        or detail.get("url") 
+        or ""
+    )
     salary = _get(detail, ["salaire", "libelle"]) or detail.get("salaire") or ""
+    company = _get(detail, ["entreprise", "nom"]) or ""
     import json as _json
     return {
         "description": description,
         "apply_url": apply_url,
         "url": url,
         "salary": salary,
+        "company": company,
         "raw_json": _json.dumps(detail, ensure_ascii=False),
     }
 

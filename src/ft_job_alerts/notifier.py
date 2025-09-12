@@ -12,7 +12,8 @@ from .config import Config
 def format_offers(rows) -> str:
     lines = []
     for r in rows:
-        line = f"[{r['score']:.2f}] {r['title']} — {r['company']} — {r['location']} — {r['url']}"
+        link = r["url"] or r["apply_url"] or (f"https://candidat.francetravail.fr/offres/recherche/detail/{r['offer_id']}" if r["offer_id"] else "")
+        line = f"[{r['score']:.2f}] {r['title']} — {r['company']} — {r['location']} — {link}"
         lines.append(line)
     return "\n".join(lines)
 
@@ -49,4 +50,3 @@ def _write_file_and_print(subject: str, body: str) -> None:
     print("\n=== Notification ===")
     print(content)
     print(f"Saved to {path}")
-
