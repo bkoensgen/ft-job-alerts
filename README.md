@@ -71,7 +71,14 @@ Keyword stats
 - Global stats on given keywords over the current selection (last 31 days here):
   - `python run.py stats --keywords-list "ros2;ros;robotique;automatisme;vision;opencv;slam;moveit;gazebo;c++" --days 31`
   - Add per-department breakdown: `--group-by dept`
-  - Save to CSV: `--outfile data/out/keyword-stats.csv`
+- Save to CSV: `--outfile data/out/keyword-stats.csv`
+
+Semantic-ish stats (automatic discovery)
+- Compute distinctive tokens and bigrams for robotics offers (CORE_ROBOTICS) vs others using log-odds:
+  - `python run.py nlp-stats --days 31 --top 40`
+- Save CSVs:
+  - `python run.py nlp-stats --days 31 --top 60 --outfile-tokens data/out/tokens.csv --outfile-bigrams data/out/bigrams.csv`
+- Tip: fill the DB broadly first (use `sweep`) for better signal.
 
 Broaden results (keyword sweep)
 - Run several fetches (they merge in DB):

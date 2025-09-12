@@ -13,6 +13,7 @@ from .scoring import score_offer
 from .storage import due_followups, init_db, recent_new_offers, upsert_offers, mark_notified, query_offers
 from .exporter import export_txt, export_md, export_csv, export_jsonl
 from .tags import compute_labels
+from .nlp import tokenize, bigrams, log_odds_with_prior
 from .storage import update_offer_details
 
 
@@ -377,6 +378,81 @@ def cmd_stats(args):
             print_table(table)
 
 
+def cmd_nlp_stats(args):
+    # Build two corpora: CORE_ROBOTICS vs other offers, then compute log-odds tokens and bigrams
+    rows = query_offers(
+        days=args.days,
+        from_date=args.from_date,
+        to_date=args.to_date,
+        status=args.status,
+        min_score=args.min_score,
+        limit=args.limit,
+        order_by="date_desc",
+    )
+    docs_core: list[list[str]] = []
+    docs_other: list[list[str]] = []
+    for r in rows:
+        d = {k: r[k] for k in r.keys()}
+        text = (d.get("title") or "") + "\n" + (d.get("description") or "")
+        toks = tokenize(text, keep=["c++","ros2","ros","moveit"])
+        from .tags import compute_labels as _cl
+        labels = _cl(d)
+        if labels.get("CORE_ROBOTICS"):
+            docs_core.append(toks)
+        else:
+            docs_other.append(toks)
+
+    # Count tokens and bigrams
+    from collections import Counter
+    ca, cb = Counter(), Counter()
+    ba, bb = Counter(), Counter()
+    for toks in docs_core:
+        ca.update(toks)
+        ba.update([" ".join(bg) for bg in bigrams(toks)])
+    for toks in docs_other:
+        cb.update(toks)
+        bb.update([" ".join(bg) for bg in bigrams(toks)])
+
+    # Compute log-odds
+    token_scores = log_odds_with_prior(ca, cb, alpha=0.1)
+    bigram_scores = log_odds_with_prior(ba, bb, alpha=0.1)
+
+    # Top N
+    top = int(args.top)
+    toks_top = [(t, int(ca.get(t,0)), round(z,3)) for t, z, _ in token_scores[:top] if ca.get(t,0) > 0]
+    bigr_top = [(t, int(ba.get(t,0)), round(z,3)) for t, z, _ in bigram_scores[:top] if ba.get(t,0) > 0]
+
+    if args.outfile_tokens:
+        import csv
+        with open(args.outfile_tokens, "w", encoding="utf-8", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["token","count_in_core","z_score"])
+            for t, c, z in toks_top:
+                w.writerow([t, c, z])
+        print(f"Tokens written to {args.outfile_tokens}")
+    else:
+        print("Top tokens (core vs other):")
+        rows_tbl = [("token","count","z")] + toks_top
+        colw = [max(len(str(x)) for x in col) for col in zip(*rows_tbl)]
+        for row in rows_tbl:
+            print("  ".join(str(x).ljust(w) for x, w in zip(row, colw)))
+
+    if args.outfile_bigrams:
+        import csv
+        with open(args.outfile_bigrams, "w", encoding="utf-8", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["bigram","count_in_core","z_score"])
+            for t, c, z in bigr_top:
+                w.writerow([t, c, z])
+        print(f"Bigrams written to {args.outfile_bigrams}")
+    else:
+        print("\nTop bigrams (core vs other):")
+        rows_tbl = [("bigram","count","z")] + bigr_top
+        colw = [max(len(str(x)) for x in col) for col in zip(*rows_tbl)]
+        for row in rows_tbl:
+            print("  ".join(str(x).ljust(w) for x, w in zip(row, colw)))
+
+
 def extract_detail_fields(detail: dict[str, Any]) -> dict[str, Any]:
     # Be tolerant to varying schemas; keep the essentials.
     def _get(d: dict, path: list[str], default=None):
@@ -569,6 +645,18 @@ def build_parser() -> argparse.ArgumentParser:
     s_stats.add_argument("--outfile", default=None, help="Write CSV if provided; otherwise print")
     s_stats.add_argument("--sort-by", choices=["offers", "occurrences"], default="offers")
     s_stats.set_defaults(func=cmd_stats)
+
+    s_nlp = sub.add_parser("nlp-stats", help="Semantic-ish stats: log-odds tokens/bigrams for CORE_ROBOTICS vs others")
+    s_nlp.add_argument("--days", type=int, default=31)
+    s_nlp.add_argument("--from", dest="from_date", default=None)
+    s_nlp.add_argument("--to", dest="to_date", default=None)
+    s_nlp.add_argument("--status", default=None)
+    s_nlp.add_argument("--min-score", dest="min_score", type=float, default=None)
+    s_nlp.add_argument("--limit", type=int, default=200000)
+    s_nlp.add_argument("--top", type=int, default=40)
+    s_nlp.add_argument("--outfile-tokens", dest="outfile_tokens", default=None)
+    s_nlp.add_argument("--outfile-bigrams", dest="outfile_bigrams", default=None)
+    s_nlp.set_defaults(func=cmd_nlp_stats)
 
     return p
 
