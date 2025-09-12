@@ -9,6 +9,28 @@ def _get_bool(name: str, default: bool = False) -> bool:
     return str(val).strip() not in ("0", "false", "FALSE", "no", "No", "")
 
 
+def _load_dotenv_if_present() -> None:
+    path = os.path.join(os.getcwd(), ".env")
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" not in line:
+                    continue
+                key, val = line.split("=", 1)
+                key = key.strip()
+                val = val.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = val
+    except Exception:
+        # Silently ignore .env parsing errors; user can export manually
+        pass
+
+
 @dataclass
 class Config:
     api_simulate: bool
@@ -31,6 +53,7 @@ class Config:
 
 
 def load_config() -> Config:
+    _load_dotenv_if_present()
     return Config(
         api_simulate=_get_bool("FT_API_SIMULATE", True),
         client_id=os.getenv("FT_CLIENT_ID"),
@@ -59,4 +82,3 @@ def load_config() -> Config:
         default_dept=os.getenv("DEFAULT_DEPT", "68"),
         default_radius_km=int(os.getenv("DEFAULT_RADIUS_KM", "50")),
     )
-

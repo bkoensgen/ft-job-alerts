@@ -9,7 +9,7 @@ What’s included
 - A sample dataset for offline testing (no network required).
 
 Quick start
-1) Python 3.10+ recommended. Create a virtualenv (optional) and set environment variables (see .env.example). At minimum:
+1) Python 3.10+ recommended. Create a virtualenv (optional). Env vars can be put in `.env` (auto‑loaded) — see `.env.example`. At minimum:
    - FT_CLIENT_ID / FT_CLIENT_SECRET (from your habilitation)
    - Prefer running in simulate mode first: FT_API_SIMULATE=1
 
@@ -75,6 +75,9 @@ Filtering flags
 - `--desc-chars N` controls how many characters of description are included in txt/md (0 to omit)
 
 Enabling real API calls (when ready)
-- Set `FT_API_SIMULATE=0`, and set `FT_CLIENT_ID` and `FT_CLIENT_SECRET` in your environment (don’t commit them).
+- Put in `.env` (auto‑loaded) or export in your shell:
+  - `FT_API_SIMULATE=0`
+  - `FT_CLIENT_ID=...`
+  - `FT_CLIENT_SECRET=...`
 - Optionally set `EMAIL_TO` and `SMTP_*` to receive email instead of text files.
 - Run: `python run.py run-daily --keywords "ros2,c++,vision" --dept 68 --radius-km 50 --auto-rome`
