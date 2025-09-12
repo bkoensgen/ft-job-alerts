@@ -16,26 +16,43 @@ class OffresEmploiClient:
         self.cfg = cfg
         self.auth = auth
 
-    def search(self, *, keywords: list[str], dept: str | None = None, radius_km: int | None = None,
-               rome_codes: list[str] | None = None, limit: int = 50, published_since_days: int | None = None) -> list[dict[str, Any]]:
+    def search(
+        self,
+        *,
+        keywords: list[str],
+        departements: list[str] | None = None,
+        commune: str | None = None,
+        distance_km: int | None = None,
+        rome_codes: list[str] | None = None,
+        limit: int = 50,
+        page: int = 0,
+        sort: int | None = None,
+        published_since_days: int | None = None,
+    ) -> list[dict[str, Any]]:
         if self.cfg.api_simulate:
             return self._load_sample()
 
         params: dict[str, Any] = {}
         if keywords:
             params["motsCles"] = ",".join(keywords)
-        if dept:
-            # In Offres v2, location can be INSEE code, dept, or lat/lon + distance
-            # Here we pass departement code via departement parameter if supported.
-            params["departement"] = dept
-        if radius_km is not None:
-            params["rayon"] = radius_km
+        if departements:
+            params["departement"] = ",".join(departements)
+        if commune:
+            params["commune"] = commune
+            if distance_km is not None:
+                params["distance"] = int(distance_km)
         if rome_codes:
             params["codeROME"] = ",".join(rome_codes)
-        params["limit"] = min(max(int(limit), 1), 150)
+        if sort is not None:
+            params["sort"] = int(sort)
         if published_since_days is not None:
-            # Common parameter name in some FT APIs, verify with docs
             params["publieeDepuis"] = int(published_since_days)
+
+        # Pagination via range (0-based)
+        lim = min(max(int(limit), 1), 150)
+        start = max(int(page), 0) * lim
+        end = start + lim - 1
+        params["range"] = f"{start}-{end}"
 
         url = f"{self.cfg.offres_search_url}?{urllib.parse.urlencode(params)}"
         token = self.auth.get_token()
@@ -44,7 +61,7 @@ class OffresEmploiClient:
         req.add_header("Accept", "application/json")
         with urllib.request.urlopen(req, timeout=20) as resp:
             raw = resp.read().decode("utf-8")
-        obj = json.loads(raw)
+        obj = json.loads(raw) if raw else {}
         # The exact structure may vary; normalize to a list of offers
         if isinstance(obj, dict) and "resultats" in obj:
             return obj["resultats"]

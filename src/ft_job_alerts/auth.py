@@ -43,7 +43,7 @@ class AuthClient:
         # Most habilitations require a scope like: "application_{client_id} api_offresdemploiv2"
         scope = self.cfg.oauth_scope
         if not scope and self.cfg.client_id:
-            scope = f"application_{self.cfg.client_id} api_offresdemploiv2"
+            scope = f"application_{self.cfg.client_id} api_offresdemploiv2 o2dsoffre"
         payload = {
             "grant_type": "client_credentials",
             "client_id": self.cfg.client_id,

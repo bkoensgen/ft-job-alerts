@@ -79,10 +79,16 @@ Enabling real API calls (when ready)
   - `FT_API_SIMULATE=0`
   - `FT_CLIENT_ID=...`
   - `FT_CLIENT_SECRET=...`
-  - `FT_SCOPE=application_${FT_CLIENT_ID} api_offresdemploiv2` (ou la valeur exacte fournie par l’habilitation)
+  - `FT_SCOPE=application_${FT_CLIENT_ID} api_offresdemploiv2 o2dsoffre` (ou la valeur exacte fournie par l’habilitation)
 - Optionally set `EMAIL_TO` and `SMTP_*` to receive email instead of text files.
 - Run: `python run.py run-daily --keywords "ros2,c++,vision" --dept 68 --radius-km 50 --auto-rome`
 
 If you hit 400 Bad Request on token
-- Check `FT_SCOPE` is present and matches your habilitation (e.g., `application_{client_id} api_offresdemploiv2`).
+- Check `FT_SCOPE` is present and matches your habilitation (e.g., `application_{client_id} api_offresdemploiv2 o2dsoffre`).
 - The CLI now surfaces the OAuth error body to help diagnose.
+
+Search tips (Offres v2)
+- Use `--commune <INSEE>` + `--distance-km N` for a radius search (the API ignores distance without commune).
+- Or use `--dept 68,67` for department filters (no radius).
+- Sorting: `--sort 0|1|2` where 1=date desc (default), 0=pertinence/date, 2=distance/pertinence.
+- Pagination: `--page P` and `--limit L` map to `range=P*L-(P*L+L-1)` (L max 150).

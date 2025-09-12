@@ -96,12 +96,25 @@ def cmd_fetch(args):
     elif args.auto_rome:
         rome_codes = rome.map_keywords_to_rome(keywords)
 
+    # Location parameters
+    departements = None
+    if args.dept:
+        departements = [d.strip() for d in str(args.dept).split(",") if d.strip()]
+    commune = args.commune
+    # `distance` only applies if `commune` is set. Keep radius_km for backward compat.
+    distance_km = args.distance_km if args.distance_km is not None else args.radius_km
+    if distance_km is not None and not commune:
+        print("[warn] --distance-km/--radius-km est ignoré si --commune n'est pas fourni (API FT)")
+
     raw = client.search(
         keywords=keywords,
-        dept=args.dept or cfg.default_dept,
-        radius_km=args.radius_km or cfg.default_radius_km,
+        departements=departements,
+        commune=commune,
+        distance_km=distance_km,
         rome_codes=rome_codes,
         limit=args.limit,
+        page=args.page,
+        sort=args.sort,
         published_since_days=args.published_since_days,
     )
 
@@ -260,9 +273,14 @@ def build_parser() -> argparse.ArgumentParser:
     s_fetch.add_argument("--keywords", default=None, help="Comma-separated keywords (default from env)")
     s_fetch.add_argument("--rome", default=None, help="Comma-separated ROME codes (override)")
     s_fetch.add_argument("--auto-rome", action="store_true", help="Derive ROME codes from keywords (stub)")
-    s_fetch.add_argument("--dept", default=None, help="Departement code (e.g., 68)")
-    s_fetch.add_argument("--radius-km", type=int, default=None, help="Search radius in km")
+    s_fetch.add_argument("--dept", default=None, help="Department code(s), comma-separated (e.g., 68 or 68,67)")
+    s_fetch.add_argument("--commune", default=None, help="INSEE commune code (required to use --distance-km)")
+    s_fetch.add_argument("--distance-km", type=int, default=None, help="Radius in km around --commune (API param distance)")
+    s_fetch.add_argument("--radius-km", type=int, default=None, help="Deprecated alias for --distance-km")
     s_fetch.add_argument("--limit", type=int, default=50)
+    s_fetch.add_argument("--page", type=int, default=0, help="Page index (multiplies the range window)")
+    s_fetch.add_argument("--sort", type=int, choices=[0, 1, 2], default=1,
+                         help="0=pertinence/date, 1=date/pertinence, 2=distance/pertinence")
     s_fetch.add_argument("--published-since-days", dest="published_since_days", type=int, default=None,
                          help="Only offers published since N days (if supported by API)")
     s_fetch.set_defaults(func=cmd_fetch)
@@ -272,8 +290,12 @@ def build_parser() -> argparse.ArgumentParser:
     s_run.add_argument("--rome", default=None)
     s_run.add_argument("--auto-rome", action="store_true")
     s_run.add_argument("--dept", default=None)
+    s_run.add_argument("--commune", default=None)
+    s_run.add_argument("--distance-km", type=int, default=None)
     s_run.add_argument("--radius-km", type=int, default=None)
     s_run.add_argument("--limit", type=int, default=50)
+    s_run.add_argument("--page", type=int, default=0)
+    s_run.add_argument("--sort", type=int, choices=[0, 1, 2], default=1)
     s_run.add_argument("--published-since-days", dest="published_since_days", type=int, default=1)
     s_run.set_defaults(func=cmd_run_daily)
 
