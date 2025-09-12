@@ -12,6 +12,7 @@ from .notifier import format_offers, notify
 from .scoring import score_offer
 from .storage import due_followups, init_db, recent_new_offers, upsert_offers, mark_notified, query_offers
 from .exporter import export_txt, export_md, export_csv, export_jsonl
+from .tags import compute_labels
 from .storage import update_offer_details
 
 
@@ -42,11 +43,15 @@ def normalize_offer(o: dict[str, Any]) -> dict[str, Any]:
     url = None
     if isinstance(o.get("origineOffre"), dict):
         url = o["origineOffre"].get("urlOrigine") or o["origineOffre"].get("url")
+        origin_code = o["origineOffre"].get("origine")
+    else:
+        origin_code = None
     if not url:
         url = o.get("url") or ""
     apply_url = o.get("lienPostuler") or url
     salary = o.get("salaire", {}).get("libelle") if isinstance(o.get("salaire"), dict) else (o.get("salary") or "")
     description = o.get("description") or ""
+    shortage = o.get("offresManqueCandidats")
 
     return {
         "offer_id": oid,
@@ -60,6 +65,8 @@ def normalize_offer(o: dict[str, Any]) -> dict[str, Any]:
         "apply_url": apply_url or "",
         "salary": salary or "",
         "description": description or "",
+        "origin_code": origin_code,
+        "offres_manque_candidats": int(bool(shortage)) if shortage is not None else None,
         "city": city or "",
         "department": department or "",
         "postal_code": postal_code or "",
@@ -205,6 +212,14 @@ def cmd_export(args):
         limit=args.limit,
         order_by="score_desc",
     )
+    # Enrich with labels for human-friendly txt/md
+    if args.format in ("txt", "md"):
+        enriched = []
+        for r in rows:
+            d = {k: r[k] for k in r.keys()}
+            d.update(compute_labels(d))
+            enriched.append(d)
+        rows = enriched  # type: ignore
     if args.format == "txt":
         path = export_txt(rows, args.outfile, desc_chars=args.desc_chars)
     elif args.format == "md":
@@ -214,6 +229,66 @@ def cmd_export(args):
     else:
         path = export_jsonl(rows, args.outfile)
     print(f"Exported {len(rows)} rows to {path}")
+
+
+def cmd_sweep(args):
+    cfg = load_config()
+    auth = AuthClient(cfg)
+    client = OffresEmploiClient(cfg, auth)
+    rome = ROMEClient(cfg)
+
+    # Prepare location parameters
+    departements = None
+    if args.dept:
+        departements = [d.strip() for d in str(args.dept).split(",") if d.strip()]
+    commune = args.commune
+    distance_km = args.distance_km
+
+    # Normalize publieeDepuis
+    pdays = args.published_since_days
+    allowed = [1, 3, 7, 14, 31]
+    if pdays not in allowed:
+        pdays = min(allowed, key=lambda x: abs(x - pdays))
+
+    total_prepared = 0
+    keywords_groups = [k.strip() for k in str(args.keywords_list).split(";") if k.strip()]
+    base_lat, base_lon = 47.76, 7.34
+    for kw in keywords_groups:
+        # Paging loop
+        max_pages = args.max_pages if args.fetch_all else 1
+        for page in range(0, max_pages):
+            raw = client.search(
+                keywords=[kw],
+                departements=departements,
+                commune=commune,
+                distance_km=distance_km,
+                rome_codes=None,
+                limit=args.limit,
+                page=page,
+                sort=args.sort,
+                published_since_days=pdays,
+            )
+            if not raw:
+                break
+            prepared: list[dict[str, Any]] = []
+            for r in raw:
+                n = normalize_offer(r)
+                if not n["offer_id"]:
+                    continue
+                n["rome_codes"] = []
+                n["keywords"] = [kw]
+                n["score"] = score_offer(r, base_lat=base_lat, base_lon=base_lon)
+                try:
+                    import json as _json
+                    n["raw_json"] = _json.dumps(r, ensure_ascii=False)
+                except Exception:
+                    n["raw_json"] = None
+                prepared.append(n)
+            total_prepared += len(prepared)
+            upsert_offers(prepared)
+            if len(raw) < args.limit:
+                break
+    print(f"Sweep complete. Inserted/updated approx: {total_prepared}")
 
 
 def extract_detail_fields(detail: dict[str, Any]) -> dict[str, Any]:
@@ -379,6 +454,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     s_auth = sub.add_parser("auth-check", help="Check OAuth config and attempt to fetch a token (redacted output)")
     s_auth.set_defaults(func=cmd_auth_check)
+
+    s_sweep = sub.add_parser("sweep", help="Run multiple keyword fetches (OR sweep) and consolidate")
+    s_sweep.add_argument("--keywords-list", default="robotique;robot;ros2;ros;automatisme;cobot;vision;ivvq;agv;amr",
+                         help="Semicolon-separated keyword groups; each entry runs a separate fetch")
+    s_sweep.add_argument("--dept", default=None)
+    s_sweep.add_argument("--commune", default=None)
+    s_sweep.add_argument("--distance-km", type=int, default=None)
+    s_sweep.add_argument("--limit", type=int, default=100)
+    s_sweep.add_argument("--all", dest="fetch_all", action="store_true")
+    s_sweep.add_argument("--max-pages", dest="max_pages", type=int, default=10)
+    s_sweep.add_argument("--sort", type=int, choices=[0,1,2], default=1)
+    s_sweep.add_argument("--published-since-days", dest="published_since_days", type=int, default=31)
+    s_sweep.set_defaults(func=cmd_sweep)
 
     return p
 

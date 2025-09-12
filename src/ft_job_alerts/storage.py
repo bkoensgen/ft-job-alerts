@@ -46,6 +46,8 @@ def init_db() -> None:
             url TEXT,
             apply_url TEXT,
             salary TEXT,
+            origin_code TEXT,
+            offres_manque_candidats INTEGER,
             score REAL DEFAULT 0,
             inserted_at TEXT,
             status TEXT DEFAULT 'new',
@@ -78,6 +80,8 @@ def ensure_offer_columns(cur: sqlite3.Cursor) -> None:
         "longitude": "REAL",
         "description": "TEXT",
         "apply_url": "TEXT",
+        "origin_code": "TEXT",
+        "offres_manque_candidats": "INTEGER",
         "raw_json": "TEXT",
     }
     for name, typ in wanted.items():
@@ -98,8 +102,9 @@ def upsert_offers(offers: Iterable[dict[str, Any]]) -> int:
                 city, department, postal_code, latitude, longitude,
                 description, rome_codes, keywords,
                 contract_type, published_at, source, url, apply_url, salary,
+                origin_code, offres_manque_candidats,
                 score, inserted_at, raw_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(offer_id) DO UPDATE SET
                 score=excluded.score,
                 title=excluded.title,
@@ -113,7 +118,9 @@ def upsert_offers(offers: Iterable[dict[str, Any]]) -> int:
                 description=excluded.description,
                 url=excluded.url,
                 apply_url=excluded.apply_url,
-                salary=excluded.salary
+                salary=excluded.salary,
+                origin_code=excluded.origin_code,
+                offres_manque_candidats=COALESCE(excluded.offres_manque_candidats, offres_manque_candidats)
             ;
             """,
             (
@@ -135,6 +142,8 @@ def upsert_offers(offers: Iterable[dict[str, Any]]) -> int:
                 o.get("url"),
                 o.get("apply_url"),
                 o.get("salary"),
+                o.get("origin_code"),
+                o.get("offres_manque_candidats"),
                 float(o.get("score", 0)),
                 now,
                 o.get("raw_json"),
