@@ -37,6 +37,8 @@ class Config:
     client_id: str | None
     client_secret: str | None
     auth_url: str
+    oauth_scope: str | None
+    oauth_audience: str | None
     offres_search_url: str
     offres_detail_url: str
     lbb_api_url: str | None
@@ -62,6 +64,8 @@ def load_config() -> Config:
             "FT_AUTH_URL",
             "https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire",
         ),
+        oauth_scope=os.getenv("FT_SCOPE"),
+        oauth_audience=os.getenv("FT_AUDIENCE"),
         offres_search_url=os.getenv(
             "FT_OFFRES_SEARCH_URL",
             "https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search",

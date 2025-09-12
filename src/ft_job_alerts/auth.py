@@ -5,6 +5,7 @@ import json
 import time
 import urllib.parse
 import urllib.request
+from urllib.error import HTTPError
 from dataclasses import dataclass
 
 from .config import Config
@@ -38,12 +39,19 @@ class AuthClient:
         return token.access_token
 
     def _fetch_token(self) -> Token:
+        # Build payload according to FT partner OAuth requirements.
+        # Most habilitations require a scope like: "application_{client_id} api_offresdemploiv2"
+        scope = self.cfg.oauth_scope
+        if not scope and self.cfg.client_id:
+            scope = f"application_{self.cfg.client_id} api_offresdemploiv2"
         payload = {
             "grant_type": "client_credentials",
             "client_id": self.cfg.client_id,
             "client_secret": self.cfg.client_secret,
-            # audience/scope sometimes needed depending on habilitation; keep minimal here
+            "scope": scope,
         }
+        if self.cfg.oauth_audience:
+            payload["audience"] = self.cfg.oauth_audience
         data = urllib.parse.urlencode(payload).encode("utf-8")
         req = urllib.request.Request(self.cfg.auth_url, data=data)
         # Some auth endpoints require Basic auth; left here for completeness
@@ -51,12 +59,19 @@ class AuthClient:
         req.add_header("Authorization", f"Basic {basic}")
         req.add_header("Content-Type", "application/x-www-form-urlencoded")
 
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            raw = resp.read().decode("utf-8")
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                raw = resp.read().decode("utf-8")
+        except HTTPError as e:
+            try:
+                err_body = e.read().decode("utf-8")
+            except Exception:
+                err_body = ""
+            raise RuntimeError(f"OAuth token request failed ({e.code}): {err_body}")
+
         obj = json.loads(raw)
         access = obj.get("access_token")
         ttl = obj.get("expires_in", 3600)
         if not access:
             raise RuntimeError("No access_token in OAuth response")
         return Token(access_token=access, expires_at=time.time() + float(ttl))
-

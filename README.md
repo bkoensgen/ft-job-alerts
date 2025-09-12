@@ -79,5 +79,10 @@ Enabling real API calls (when ready)
   - `FT_API_SIMULATE=0`
   - `FT_CLIENT_ID=...`
   - `FT_CLIENT_SECRET=...`
+  - `FT_SCOPE=application_${FT_CLIENT_ID} api_offresdemploiv2` (ou la valeur exacte fournie par l’habilitation)
 - Optionally set `EMAIL_TO` and `SMTP_*` to receive email instead of text files.
 - Run: `python run.py run-daily --keywords "ros2,c++,vision" --dept 68 --radius-km 50 --auto-rome`
+
+If you hit 400 Bad Request on token
+- Check `FT_SCOPE` is present and matches your habilitation (e.g., `application_{client_id} api_offresdemploiv2`).
+- The CLI now surfaces the OAuth error body to help diagnose.
