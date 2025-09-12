@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 from typing import Any
+from argparse import Namespace
 
 from .auth import AuthClient
 from .clients import OffresEmploiClient, ROMEClient
@@ -583,6 +584,145 @@ def cmd_enrich(args):
     print(f"Enriched {updated} offers (from {len(ids)})")
 
 
+def cmd_pipeline_daily(args):
+    # 1) Fetch (optionally multi-page)
+    fargs = Namespace(
+        keywords=args.keywords,
+        rome=None,
+        auto_rome=False,
+        dept=args.dept,
+        commune=args.commune,
+        distance_km=args.distance_km,
+        radius_km=None,
+        limit=args.limit,
+        page=0,
+        sort=1,
+        published_since_days=args.published_since_days,
+        min_creation=None,
+        max_creation=None,
+        origine_offre=None,
+        fetch_all=bool(args.fetch_all),
+        max_pages=args.max_pages,
+    )
+    print("[pipeline] Fetching offers…")
+    cmd_fetch(fargs)
+
+    # 2) Enrich
+    if args.enrich:
+        eargs = Namespace(
+            ids=None,
+            days=args.published_since_days,
+            from_date=None,
+            to_date=None,
+            status=None,
+            min_score=None,
+            only_missing_description=True,
+            min_desc_len=40,
+            limit=args.enrich_limit,
+            sleep_ms=args.enrich_sleep_ms,
+        )
+        print("[pipeline] Enriching offer details…")
+        cmd_enrich(eargs)
+
+    # 3) Export
+    xargs = Namespace(
+        format=args.export_format,
+        days=args.published_since_days,
+        from_date=None,
+        to_date=None,
+        status=None,
+        min_score=args.min_score,
+        limit=args.export_top,
+        outfile=None,
+        desc_chars=args.desc_chars,
+    )
+    print("[pipeline] Exporting results…")
+    cmd_export(xargs)
+
+
+def cmd_pipeline_weekly(args):
+    # 1) Sweep multiple keywords (OR)
+    swargs = Namespace(
+        keywords_list=args.keywords_list,
+        dept=args.dept,
+        commune=args.commune,
+        distance_km=args.distance_km,
+        limit=args.limit,
+        fetch_all=True,
+        max_pages=args.max_pages,
+        sort=1,
+        published_since_days=args.published_since_days,
+    )
+    print("[pipeline] Sweep multiple keywords…")
+    cmd_sweep(swargs)
+
+    # 2) Enrich
+    eargs = Namespace(
+        ids=None,
+        days=args.published_since_days,
+        from_date=None,
+        to_date=None,
+        status=None,
+        min_score=None,
+        only_missing_description=True,
+        min_desc_len=40,
+        limit=1000,
+        sleep_ms=200,
+    )
+    print("[pipeline] Enriching offer details…")
+    cmd_enrich(eargs)
+
+    # 3) Export
+    xargs = Namespace(
+        format="md",
+        days=args.published_since_days,
+        from_date=None,
+        to_date=None,
+        status=None,
+        min_score=args.min_score,
+        limit=args.export_top,
+        outfile=None,
+        desc_chars=args.desc_chars,
+    )
+    print("[pipeline] Exporting results…")
+    cmd_export(xargs)
+
+    # 4) Keyword stats
+    kargs = Namespace(
+        keywords_list=args.stats_keywords,
+        mode="word",
+        group_by="none",
+        days=args.published_since_days,
+        from_date=None,
+        to_date=None,
+        status=None,
+        min_score=None,
+        limit=100000,
+        outfile=args.stats_outfile,
+        sort_by="offers",
+    )
+    print("[pipeline] Computing keyword stats…")
+    cmd_stats(kargs)
+
+    # 5) NLP stats
+    nlp = Namespace(
+        days=args.published_since_days,
+        from_date=None,
+        to_date=None,
+        status=None,
+        min_score=None,
+        limit=200000,
+        top=args.nlp_top,
+        min_df=args.nlp_min_df,
+        max_df=args.nlp_max_df,
+        stop_add=args.nlp_stop_add,
+        outfile_tokens=args.nlp_outfile_tokens,
+        outfile_bigrams=args.nlp_outfile_bigrams,
+    )
+    print("[pipeline] Computing NLP stats…")
+    cmd_nlp_stats(nlp)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="ft-job-alerts", description="France Travail job alerts pipeline")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -709,6 +849,50 @@ def build_parser() -> argparse.ArgumentParser:
     s_nlp.add_argument("--outfile-tokens", dest="outfile_tokens", default=None)
     s_nlp.add_argument("--outfile-bigrams", dest="outfile_bigrams", default=None)
     s_nlp.set_defaults(func=cmd_nlp_stats)
+
+    # Pipeline presets
+    s_pipe = sub.add_parser("pipeline", help="Run a full pipeline (daily/weekly presets)")
+    pipe_sub = s_pipe.add_subparsers(dest="pipeline", required=True)
+
+    p_daily = pipe_sub.add_parser("daily", help="Daily preset: fetch → enrich → export")
+    p_daily.add_argument("--keywords", default="robotique")
+    p_daily.add_argument("--dept", default=None)
+    p_daily.add_argument("--commune", default=None)
+    p_daily.add_argument("--distance-km", type=int, default=None)
+    p_daily.add_argument("--published-since-days", type=int, default=31)
+    p_daily.add_argument("--limit", type=int, default=100)
+    p_daily.add_argument("--all", dest="fetch_all", action="store_true", default=True,
+                        help="Fetch multiple pages (default on)")
+    p_daily.add_argument("--max-pages", type=int, default=10)
+    p_daily.add_argument("--export-top", type=int, default=200)
+    p_daily.add_argument("--export-format", choices=["md","txt"], default="md")
+    p_daily.add_argument("--min-score", type=float, default=2.0)
+    p_daily.add_argument("--desc-chars", type=int, default=-1)
+    p_daily.add_argument("--enrich", action="store_true", default=True)
+    p_daily.add_argument("--enrich-limit", type=int, default=500)
+    p_daily.add_argument("--enrich-sleep-ms", type=int, default=200)
+    p_daily.set_defaults(func=cmd_pipeline_daily)
+
+    p_week = pipe_sub.add_parser("weekly", help="Weekly preset: sweep → enrich → export → stats → nlp-stats")
+    p_week.add_argument("--keywords-list", default="robotique;robot;ros2;ros;automatisme;cobot;vision;ivvq;agv;amr")
+    p_week.add_argument("--dept", default=None)
+    p_week.add_argument("--commune", default=None)
+    p_week.add_argument("--distance-km", type=int, default=None)
+    p_week.add_argument("--published-since-days", type=int, default=31)
+    p_week.add_argument("--limit", type=int, default=100)
+    p_week.add_argument("--max-pages", type=int, default=20)
+    p_week.add_argument("--export-top", type=int, default=300)
+    p_week.add_argument("--min-score", type=float, default=2.0)
+    p_week.add_argument("--desc-chars", type=int, default=-1)
+    p_week.add_argument("--stats-keywords", default="ros2;ros;robotique;automatisme;vision;opencv;slam;moveit;gazebo;c++")
+    p_week.add_argument("--stats-outfile", default="data/out/keyword-stats.csv")
+    p_week.add_argument("--nlp-top", type=int, default=60)
+    p_week.add_argument("--nlp-min-df", type=float, default=0.005)
+    p_week.add_argument("--nlp-max-df", type=float, default=0.4)
+    p_week.add_argument("--nlp-stop-add", default="poste;profil;mission;client;vous;h/f;cdi;interim;operateur;soudure;pieces;equipements")
+    p_week.add_argument("--nlp-outfile-tokens", default="data/out/tokens.csv")
+    p_week.add_argument("--nlp-outfile-bigrams", default="data/out/bigrams.csv")
+    p_week.set_defaults(func=cmd_pipeline_weekly)
 
     return p
 

@@ -23,7 +23,7 @@ Quick start
    - Notifications written under data/out/ (in simulate mode without SMTP config)
 
 Daily usage (optional)
-- Export is primary. For background runs: `python run.py run-daily --keywords "ros2,c++,vision" --dept 68 --radius-km 50`.
+- Export is primary. For background runs: `python run.py run-daily --keywords "ros2,c++,vision" --commune 68224 --distance-km 50`.
 - Daily run does: fetch (or simulate), filter/score, store new offers, and optionally send a summary notification. It also includes due follow-ups (J+5/J+12) if you’ve marked offers as applied.
 
 Follow-ups
@@ -61,11 +61,22 @@ Most useful commands
   - `python run.py fetch --keywords "robotique" --dept 68,67 --published-since-days 31 --limit 100 --all --max-pages 10`
 - Enrich with full descriptions + apply URL (detail endpoint):
   - `python run.py enrich --days 31 --only-missing-description --limit 500 --sleep-ms 200`
+- Keyword sweep (OR, consolidate DB):
+  - `python run.py sweep --keywords-list "robotique;robot;ros2;ros;automatisme;cobot;vision;ivvq;agv;amr" --published-since-days 31 --limit 100 --all --max-pages 20`
 - Export for AI analysis (Markdown, full description):
   - `python run.py export --format md --days 31 --min-score 2.0 --top 200 --desc-chars -1`
+  - TXT/MD exports include simple labels and tags (CORE_ROBOTICS, SENIORITY, REMOTE, PLC tags, sensors, adjacent categories).
 - Export CSV (full fields) and JSONL:
   - `python run.py export --format csv --days 31 --outfile data/out/offres.csv`
   - `python run.py export --format jsonl --days 31 --outfile data/out/offres.jsonl`
+
+One-shot pipelines
+- Daily (France entière par défaut), fetch → enrich → export:
+  - `python run.py pipeline daily --keywords "robotique" --published-since-days 31 --limit 100 --max-pages 10 --export-top 200 --export-format md --desc-chars -1`
+  - Localisation en option: `--commune 68224 --distance-km 50` ou `--dept 68,67`
+- Weekly (couverture large), sweep → enrich → export → stats → nlp-stats:
+  - `python run.py pipeline weekly --keywords-list "robotique;robot;ros2;ros;automatisme;cobot;vision;ivvq;agv;amr" --published-since-days 31 --limit 100 --max-pages 20 --export-top 300 --desc-chars -1`
+  - Produit aussi: `data/out/keyword-stats.csv`, `data/out/tokens.csv`, `data/out/bigrams.csv`
 
 Keyword stats
 - Global stats on given keywords over the current selection (last 31 days here):
