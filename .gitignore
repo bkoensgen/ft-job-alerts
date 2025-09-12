@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Local env
+.env
+
+# Data outputs (keep samples tracked)
+data/ft_jobs.db
+data/*.db
+data/out/
+data/out/**
+
+# OS
+.DS_Store
