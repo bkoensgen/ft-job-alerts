@@ -12,6 +12,7 @@ from .notifier import format_offers, notify
 from .scoring import score_offer
 from .storage import due_followups, init_db, recent_new_offers, upsert_offers, mark_notified, query_offers
 from .exporter import export_txt, export_md, export_csv, export_jsonl
+from .storage import update_offer_details
 
 
 def normalize_offer(o: dict[str, Any]) -> dict[str, Any]:
@@ -166,6 +167,79 @@ def cmd_export(args):
     print(f"Exported {len(rows)} rows to {path}")
 
 
+def extract_detail_fields(detail: dict[str, Any]) -> dict[str, Any]:
+    # Be tolerant to varying schemas; keep the essentials.
+    def _get(d: dict, path: list[str], default=None):
+        cur = d
+        for k in path:
+            if not isinstance(cur, dict):
+                return default
+            cur = cur.get(k)
+        return cur if cur is not None else default
+
+    description = detail.get("description") or _get(detail, ["descriptionOffre"]) or ""
+    # Try various keys that may contain an application URL
+    apply_url = (
+        detail.get("lienPostuler")
+        or _get(detail, ["contact", "urlCandidature"])  # example in some schemas
+        or _get(detail, ["origineOffre", "url"])
+        or detail.get("url")
+        or ""
+    )
+    url = _get(detail, ["origineOffre", "url"]) or detail.get("url") or ""
+    salary = _get(detail, ["salaire", "libelle"]) or detail.get("salaire") or ""
+    import json as _json
+    return {
+        "description": description,
+        "apply_url": apply_url,
+        "url": url,
+        "salary": salary,
+        "raw_json": _json.dumps(detail, ensure_ascii=False),
+    }
+
+
+def cmd_enrich(args):
+    cfg = load_config()
+    auth = AuthClient(cfg)
+    client = OffresEmploiClient(cfg, auth)
+
+    ids: list[str]
+    if args.ids:
+        ids = [s.strip() for s in args.ids.split(",") if s.strip()]
+    else:
+        rows = query_offers(
+            days=args.days,
+            from_date=args.from_date,
+            to_date=args.to_date,
+            status=args.status,
+            min_score=args.min_score,
+            limit=args.limit,
+            order_by="date_desc",
+        )
+        # If only missing description requested, filter here
+        if args.only_missing_description:
+            rows = [r for r in rows if not (r["description"] and len(str(r["description"]).strip()) >= args.min_desc_len)]
+        ids = [r["offer_id"] for r in rows]
+
+    import time
+    updated = 0
+    for oid in ids:
+        try:
+            d = client.detail(oid)
+            if not d:
+                continue
+            fields = extract_detail_fields(d)
+            # Skip if no new info
+            if not any(fields.get(k) for k in ("description", "apply_url", "salary")):
+                continue
+            update_offer_details(oid, fields)
+            updated += 1
+            time.sleep(max(0, args.sleep_ms) / 1000.0)
+        except Exception as e:
+            print(f"enrich: failed {oid}: {e}")
+    print(f"Enriched {updated} offers (from {len(ids)})")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="ft-job-alerts", description="France Travail job alerts pipeline")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -211,6 +285,21 @@ def build_parser() -> argparse.ArgumentParser:
     s_export.add_argument("--desc-chars", dest="desc_chars", type=int, default=400,
                          help="Include description truncated to N chars (0 to omit)")
     s_export.set_defaults(func=cmd_export)
+
+    s_enrich = sub.add_parser("enrich", help="Fetch offer details to fill full description/apply URL/salary")
+    s_enrich.add_argument("--ids", default=None, help="Comma-separated offer IDs to enrich (overrides filters)")
+    s_enrich.add_argument("--days", type=int, default=None)
+    s_enrich.add_argument("--from", dest="from_date", default=None)
+    s_enrich.add_argument("--to", dest="to_date", default=None)
+    s_enrich.add_argument("--status", default=None)
+    s_enrich.add_argument("--min-score", dest="min_score", type=float, default=None)
+    s_enrich.add_argument("--only-missing-description", action="store_true",
+                          help="Only enrich offers with empty or very short description")
+    s_enrich.add_argument("--min-desc-len", type=int, default=40,
+                          help="Threshold for considering a description as present")
+    s_enrich.add_argument("--limit", type=int, default=100, help="Max number of offers to enrich")
+    s_enrich.add_argument("--sleep-ms", type=int, default=250, help="Delay between calls (rate limit)")
+    s_enrich.set_defaults(func=cmd_enrich)
 
     return p
 

@@ -19,7 +19,9 @@ def export_txt(rows, outfile: str | None = None, desc_chars: int | None = 400) -
     with open(outfile, "w", encoding="utf-8") as f:
         for r in rows:
             desc = r["description"] or ""
-            if desc_chars is not None and desc_chars > 0 and len(desc) > desc_chars:
+            if desc_chars == 0:
+                desc = ""
+            elif desc_chars is not None and desc_chars > 0 and len(desc) > desc_chars:
                 desc = desc[: desc_chars].rstrip() + "…"
             loc_detail = f"{r['city']} ({r['department']})" if r["city"] else r["location"]
             line1 = (
@@ -50,6 +52,8 @@ def export_md(rows, outfile: str | None = None, desc_chars: int | None = 500) ->
             f.write(f"- ID: `{r['offer_id']}`\n")
             f.write(f"- URL: {r['url']}\n")
             desc = r["description"] or ""
+            if desc_chars == 0:
+                desc = ""
             if desc:
                 if desc_chars is not None and desc_chars > 0 and len(desc) > desc_chars:
                     desc = desc[: desc_chars].rstrip() + "…"

@@ -60,6 +60,14 @@ Export usage (analysis-friendly)
 - Export JSONL (idéal pour pipelines IA):
   - `python run.py export --format jsonl --days 7 --outfile data/out/offres.jsonl`
 
+Get full descriptions (real API)
+- After fetching IDs, run enrichment to pull full details (description, apply URL, salary) via the offer detail endpoint:
+  - `python run.py enrich --days 7 --only-missing-description --limit 100 --sleep-ms 250`
+- For specific offers:
+  - `python run.py enrich --ids OFFER123,OFFER456`
+- Then export with full descriptions (no truncation):
+  - `python run.py export --format md --days 7 --min-score 2.0 --top 30 --desc-chars -1`
+
 Filtering flags
 - `--days N` (relative window on inserted_at) or `--from 2025-09-01 --to 2025-09-12`
 - `--status new|applied|rejected|to_follow` (optional)

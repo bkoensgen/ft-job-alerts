@@ -266,3 +266,20 @@ def query_offers(
     rows = cur.fetchall()
     con.close()
     return rows
+
+
+def update_offer_details(offer_id: str, fields: dict[str, Any]) -> None:
+    if not fields:
+        return
+    con = connect()
+    cur = con.cursor()
+    cols = []
+    params: list[Any] = []
+    for k, v in fields.items():
+        cols.append(f"{k}=?")
+        params.append(v)
+    params.append(offer_id)
+    sql = f"UPDATE offers SET {', '.join(cols)} WHERE offer_id=?"
+    cur.execute(sql, params)
+    con.commit()
+    con.close()

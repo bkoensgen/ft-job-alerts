@@ -59,6 +59,22 @@ class OffresEmploiClient:
         with open(sample_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
+    def detail(self, offer_id: str) -> dict[str, Any]:
+        if self.cfg.api_simulate:
+            path = pathlib.Path("data/samples/offres_detail") / f"{offer_id}.json"
+            if path.exists():
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            return {}
+        url = self.cfg.offres_detail_url.replace("{id}", urllib.parse.quote(str(offer_id)))
+        token = self.auth.get_token()
+        req = urllib.request.Request(url)
+        req.add_header("Authorization", f"Bearer {token}")
+        req.add_header("Accept", "application/json")
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            raw = resp.read().decode("utf-8")
+        return json.loads(raw)
+
 
 class ROMEClient:
     def __init__(self, cfg: Config):

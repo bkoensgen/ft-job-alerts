@@ -1,0 +1,8 @@
+{
+  "id": "OFFER123",
+  "description": "Nous recherchons un ingénieur robotique junior maîtrisant ROS 2, C++, vision (OpenCV) pour développer des fonctionnalités de navigation et perception. Participation à l'intégration capteurs (Lidar, caméras), SLAM, path planning. Connaissance de MoveIt et Gazebo appréciée.",
+  "lienPostuler": "https://www.example.com/candidature/OFFER123",
+  "salaire": {"libelle": "35-42k€"},
+  "origineOffre": {"url": "https://www.example.com/offres/OFFER123"}
+}
+
