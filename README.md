@@ -96,6 +96,7 @@ Charts and dashboards (PNGs + CSVs)
 - Produces:
   - Bar charts + CSVs: departments, top companies, contracts, weekly timeline, ROS stack tags, robot brands, vision libs, languages, PLC tags.
   - If matplotlib isn’t installed, ASCII bar charts are written alongside CSVs.
+ - Install for PNGs: `pip install matplotlib seaborn` (optional; without it, you get ASCII + CSV).
 
 Semantic-ish stats (automatic discovery)
 - Compute distinctive tokens and bigrams for robotics offers (CORE_ROBOTICS) vs others using log-odds:

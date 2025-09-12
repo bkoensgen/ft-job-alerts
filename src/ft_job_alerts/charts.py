@@ -13,13 +13,21 @@ def _ensure_dir(path: str) -> None:
     os.makedirs(path, exist_ok=True)
 
 
-def _safe_matplotlib():
+def _safe_matplotlib(require: bool = False):
     try:
         import matplotlib
         matplotlib.use("Agg")  # headless
         import matplotlib.pyplot as plt
+        # optional seaborn styling
+        try:
+            import seaborn as sns  # type: ignore
+            sns.set_theme(style="whitegrid")
+        except Exception:
+            pass
         return plt
-    except Exception:
+    except Exception as e:
+        if require:
+            raise RuntimeError("matplotlib not installed. Install with: pip install matplotlib seaborn") from e
         return None
 
 
@@ -42,8 +50,8 @@ def _ascii_bar(path: str, pairs: List[Tuple[str, int]], title: str = ""):
         f.write("\n".join(lines))
 
 
-def _bar_chart(path_png: str, pairs: List[Tuple[str, int]], title: str):
-    plt = _safe_matplotlib()
+def _bar_chart(path_png: str, pairs: List[Tuple[str, int]], title: str, require_mpl: bool = False):
+    plt = _safe_matplotlib(require=require_mpl)
     if not plt:
         _ascii_bar(path_png.replace(".png", ".txt"), pairs, title)
         return
@@ -54,6 +62,31 @@ def _bar_chart(path_png: str, pairs: List[Tuple[str, int]], title: str):
     plt.barh(labels, values)
     plt.gca().invert_yaxis()
     plt.title(title)
+    plt.tight_layout()
+    plt.savefig(path_png)
+    plt.close()
+
+
+def _hist_chart(path_png: str, values: List[float], bins: int = 20, title: str = "Histogram", require_mpl: bool = False):
+    plt = _safe_matplotlib(require=require_mpl)
+    if not plt:
+        # write ASCII summary
+        if not values:
+            _ascii_bar(path_png.replace(".png", ".txt"), [("no data", 0)], title)
+            return
+        import statistics as stat
+        lines = [title,
+                 f"count={len(values)} mean={stat.mean(values):.2f} median={stat.median(values):.2f}"]
+        with open(path_png.replace(".png", ".txt"), "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+        return
+    if not values:
+        values = [0.0]
+    plt.figure(figsize=(8, 4))
+    plt.hist(values, bins=bins, color="#4C72B0")
+    plt.title(title)
+    plt.xlabel("score")
+    plt.ylabel("count")
     plt.tight_layout()
     plt.savefig(path_png)
     plt.close()
@@ -71,7 +104,7 @@ def week_bucket(iso_ts: str | None) -> str:
     return monday.strftime("%Y-%m-%d")
 
 
-def build_charts(rows, outdir: str):
+def build_charts(rows, outdir: str, require_mpl: bool = False):
     _ensure_dir(outdir)
     # Gather aggregates
     dept = Counter()
@@ -126,5 +159,14 @@ def build_charts(rows, outdir: str):
         _write_csv(os.path.join(outdir, f"{name}.csv"), ["label", "count"], pairs)
         if name == "timeline_weeks":
             pairs.sort(key=lambda kv: kv[0])
-        _bar_chart(os.path.join(outdir, f"{name}.png"), pairs, title=name.replace("_", " ").title())
+        _bar_chart(os.path.join(outdir, f"{name}.png"), pairs, title=name.replace("_", " ").title(), require_mpl=require_mpl)
 
+    # Score histogram
+    scores: List[float] = []
+    for r in rows:
+        try:
+            v = float(r["score"] if not isinstance(r, dict) else r.get("score", 0))
+        except Exception:
+            v = 0.0
+        scores.append(v)
+    _hist_chart(os.path.join(outdir, "score_hist.png"), scores, bins=20, title="Score distribution", require_mpl=require_mpl)

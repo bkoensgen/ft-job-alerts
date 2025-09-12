@@ -530,7 +530,7 @@ def cmd_charts(args):
         order_by="date_desc",
     )
     print(f"[charts] Building charts from {len(rows)} offers → {args.outdir}")
-    build_charts(rows, args.outdir)
+    build_charts(rows, args.outdir, require_mpl=bool(args.require_mpl))
     print("[charts] Done.")
 
     if args.outfile_bigrams:
@@ -780,6 +780,20 @@ def cmd_pipeline_weekly(args):
     print("[pipeline] Building company watchlist…")
     cmd_watchlist(wargs)
 
+    # 7) Charts (PNG + CSV)
+    cargs = Namespace(
+        days=args.published_since_days,
+        from_date=None,
+        to_date=None,
+        status=None,
+        min_score=None,
+        limit=200000,
+        outdir="data/out/charts",
+        require_mpl=False,
+    )
+    print("[pipeline] Generating charts…")
+    cmd_charts(cargs)
+
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="ft-job-alerts", description="France Travail job alerts pipeline")
@@ -970,6 +984,7 @@ def build_parser() -> argparse.ArgumentParser:
     s_charts.add_argument("--min-score", dest="min_score", type=float, default=None)
     s_charts.add_argument("--limit", type=int, default=200000)
     s_charts.add_argument("--outdir", default="data/out/charts")
+    s_charts.add_argument("--require-mpl", dest="require_mpl", action="store_true", help="Fail if matplotlib is not installed")
     s_charts.set_defaults(func=cmd_charts)
 
     return p
