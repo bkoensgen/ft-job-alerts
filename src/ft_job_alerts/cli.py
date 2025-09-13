@@ -1143,6 +1143,10 @@ def build_parser() -> argparse.ArgumentParser:
     s_charts.add_argument("--require-mpl", dest="require_mpl", action="store_true", help="Fail if matplotlib is not installed")
     s_charts.set_defaults(func=cmd_charts)
 
+    # GUI (Tkinter)
+    s_gui = sub.add_parser("gui", help="Interface graphique (sélection simple → fetch+export)")
+    s_gui.set_defaults(func=cmd_gui)
+
     # TUI (interactive helper)
     s_tui = sub.add_parser("tui", help="Assistant interactif (sélection catégories/jours/localisation → fetch+export)")
     s_tui.set_defaults(func=cmd_tui)
@@ -1168,7 +1172,16 @@ def cmd_auth_check(_args):
         token = AuthClient(cfg).get_token()
         print("Token OK (length):", len(token))
     except Exception as e:
-    print("Auth error:", e)
+        print("Auth error:", e)
+
+
+def cmd_gui(_args):
+    # Launch Tkinter GUI for non-technical users
+    try:
+        from .gui import main as gui_main
+    except Exception as e:
+        raise SystemExit(f"GUI indisponible: {e}")
+    gui_main(None)
 
 
 if __name__ == "__main__":
