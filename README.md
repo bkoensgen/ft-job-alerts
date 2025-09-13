@@ -168,3 +168,8 @@ Nationwide examples
   - `python run.py fetch --keywords "robotique" --published-since-days 31 --limit 100 --all --max-pages 20`
 - Radius around Mulhouse (INSEE 68224), 50 km:
   - `python run.py fetch --keywords "robotique" --commune 68224 --distance-km 50 --published-since-days 14 --limit 100 --all --max-pages 10`
+
+GUI and TUI (no terminal skills required)
+- Graphical interface: `python run.py gui` or double‑click `run_gui.pyw` (Windows) / `run_gui.py` (macOS/Linux). Select categories, days, location, format; it fetches and exports automatically.
+- Interactive text menu: `python run.py tui` for a guided flow in the terminal.
+- Packaging (optional): with `pyproject.toml`, you can install locally and run the console script `ft-job-alerts` (after `pip install -e .`).
