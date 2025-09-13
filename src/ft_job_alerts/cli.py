@@ -783,6 +783,174 @@ def cmd_pipeline_weekly(args):
     cmd_charts(cargs)
 
 
+def cmd_tui(_args):
+    # Minimal interactive menu to help non-technical users select categories, days, and location
+    from argparse import Namespace as _NS
+    import os as _os
+
+    cfg = load_config()
+    print("\n=== FT Job Alerts — Assistant interactif ===\n")
+    print("Mode:", "SIMULATE (local)" if cfg.api_simulate else "REAL API")
+    if cfg.api_simulate:
+        print("Astuce: vous pouvez tout tester sans réseau (FT_API_SIMULATE=1).\n")
+
+    categories = [
+        ("Robotique / ROS", ["ros2", "ros", "robotique", "robot"]),
+        ("Vision industrielle", ["vision", "opencv", "halcon", "cognex", "keyence"]),
+        ("Navigation / SLAM", ["navigation", "slam", "path planning"]),
+        ("ROS stack (nav2, moveit…)", ["moveit", "nav2", "gazebo", "urdf", "tf2", "pcl", "rclcpp", "rclpy"]),
+        ("Marques robots", ["fanuc", "abb", "kuka", "staubli", "yaskawa", "ur"]),
+        ("Automatisme / PLC", ["automatisme", "plc", "grafcet", "siemens", "twincat"]),
+        ("Langages", ["c++", "python"]),
+        ("Capteurs", ["lidar", "camera", "imu"]),
+    ]
+
+    def ask(prompt: str, default: str | None = None) -> str:
+        sfx = f" [{default}]" if default is not None else ""
+        val = input(f"{prompt}{sfx}: ").strip()
+        return val if val else (default or "")
+
+    def ask_yes(prompt: str, default: bool = True) -> bool:
+        d = "Y/n" if default else "y/N"
+        v = input(f"{prompt} ({d}): ").strip().lower()
+        if not v:
+            return default
+        return v in ("y", "yes", "o", "oui")
+
+    # Categories selection
+    print("Choisissez des catégories (ex: 1,3,5). Laissez vide pour utiliser les mots-clés par défaut.")
+    for i, (label, _) in enumerate(categories, start=1):
+        print(f"  {i}) {label}")
+    sel = input("Votre sélection: ").strip()
+    selected_keywords: list[str] = []
+    if sel:
+        try:
+            ids = [int(x) for x in sel.replace(" ", "").split(",") if x]
+            for i in ids:
+                if 1 <= i <= len(categories):
+                    selected_keywords.extend(categories[i - 1][1])
+        except Exception:
+            pass
+    if not selected_keywords:
+        selected_keywords = cfg.default_keywords
+    extra_kw = ask("Mots-clés supplémentaires (séparés par des virgules)", "").strip()
+    if extra_kw:
+        selected_keywords.extend([k.strip() for k in extra_kw.split(",") if k.strip()])
+    # Remove duplicates, keep order
+    seen = set()
+    keywords = [k for k in selected_keywords if not (k in seen or seen.add(k))]
+
+    # Location
+    print("\nFiltrage géographique (optionnel):")
+    use_dept = ask_yes("  Filtrer par département(s) ?", True)
+    dept = None
+    commune = None
+    distance_km = None
+    if use_dept:
+        dept = ask("  Code(s) département (ex: 68 ou 68,67)", cfg.default_dept)
+    else:
+        if ask_yes("  Rechercher autour d'une commune (INSEE) ?", False):
+            commune = ask("    Code INSEE commune", "") or None
+            if commune:
+                try:
+                    distance_km = int(ask("    Distance (km)", str(cfg.default_radius_km)))
+                except Exception:
+                    distance_km = cfg.default_radius_km
+
+    # Time window and export options
+    print("\nFenêtre temporelle de publication (Offres v2). Valeurs permises: 1,3,7,14,31")
+    try:
+        pdays = int(ask("  Nombre de jours", "7"))
+    except Exception:
+        pdays = 7
+    try:
+        topn = int(ask("  Nombre maximal d'offres à exporter", "100"))
+    except Exception:
+        topn = 100
+    fmt = ask("  Format d'export (txt/md/csv/jsonl)", "md").lower() or "md"
+    full_desc = fmt in ("md", "txt") and ask_yes("  Inclure la description complète ?", True)
+    desc_chars = -1 if full_desc else (500 if fmt == "md" else 400)
+
+    # Summary
+    print("\nRésumé:")
+    print("  Mots-clés:", ", ".join(keywords))
+    if dept:
+        print("  Département(s):", dept)
+    elif commune:
+        print(f"  Autour de {commune} à {distance_km} km")
+    else:
+        print("  France entière")
+    print(f"  Jours: {pdays}  |  Export: {fmt} (top {topn})")
+    if not ask_yes("Lancer maintenant ?", True):
+        print("Annulé.")
+        return
+
+    # 1) Fetch (or simulate)
+    fargs = _NS(
+        keywords=",".join(keywords),
+        rome=None,
+        auto_rome=False,
+        dept=dept,
+        commune=commune,
+        distance_km=distance_km,
+        radius_km=None,
+        limit=100,
+        page=0,
+        sort=1,
+        published_since_days=pdays,
+        min_creation=None,
+        max_creation=None,
+        origine_offre=None,
+        fetch_all=True,
+        max_pages=10,
+    )
+    print("\n[1/2] Récupération des offres…")
+    cmd_fetch(fargs)
+
+    # 2) Export selection
+    print("[2/2] Export…")
+    rows = query_offers(
+        days=pdays,
+        from_date=None,
+        to_date=None,
+        status=None,
+        min_score=None,
+        limit=topn,
+        order_by="score_desc",
+    )
+    from .exporter import export_txt, export_md, export_csv, export_jsonl
+    _os.makedirs("data/out", exist_ok=True)
+    if fmt == "txt":
+        out_path = export_txt(rows, None, desc_chars=desc_chars if isinstance(desc_chars, int) else 400)
+    elif fmt == "md":
+        out_path = export_md(rows, None, desc_chars=desc_chars if isinstance(desc_chars, int) else 500)
+    elif fmt == "csv":
+        out_path = export_csv(rows, None)
+    else:
+        out_path = export_jsonl(rows, None)
+    print(f"Fini. Export: {out_path}")
+
+    # 3) Petit guide IA (affiché + fichier)
+    guide = (
+        "\nConseil — Analyse avec un agent IA (gratuit):\n"
+        "1) Ouvrez Google AI Studio (https://aistudio.google.com) → ‘Create a prompt’.\n"
+        "2) Ouvrez le fichier exporté (" + out_path + ") et copiez le contenu.\n"
+        "3) Collez-le dans le chat puis utilisez un prompt comme: \n\n"
+        "Vous êtes mon assistant emploi. Profil: junior robotique (ROS2/C++/vision), mobilité limitée.\n"
+        "À partir des offres collées, propose un top 10 trié par pertinence, avec:\n"
+        "- résumé en 2 lignes,\n- principaux critères correspondants (ROS2/vision/robot brands/remote),\n"
+        "- score 0–10 et raison,\n- questions à poser au recruteur.\n\n"
+        "Ensuite, liste 5 entreprises à suivre (fréquence des offres).\n"
+    )
+    print(guide)
+    try:
+        with open("data/out/ai_prompt_example.txt", "w", encoding="utf-8") as f:
+            f.write(guide)
+        print("Guide IA enregistré: data/out/ai_prompt_example.txt")
+    except Exception:
+        pass
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="ft-job-alerts", description="France Travail job alerts pipeline")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -975,6 +1143,10 @@ def build_parser() -> argparse.ArgumentParser:
     s_charts.add_argument("--require-mpl", dest="require_mpl", action="store_true", help="Fail if matplotlib is not installed")
     s_charts.set_defaults(func=cmd_charts)
 
+    # TUI (interactive helper)
+    s_tui = sub.add_parser("tui", help="Assistant interactif (sélection catégories/jours/localisation → fetch+export)")
+    s_tui.set_defaults(func=cmd_tui)
+
     return p
 
 
@@ -996,7 +1168,7 @@ def cmd_auth_check(_args):
         token = AuthClient(cfg).get_token()
         print("Token OK (length):", len(token))
     except Exception as e:
-        print("Auth error:", e)
+    print("Auth error:", e)
 
 
 if __name__ == "__main__":
