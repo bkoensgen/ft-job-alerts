@@ -50,6 +50,7 @@ def init_db() -> None:
             offres_manque_candidats INTEGER,
             score REAL DEFAULT 0,
             inserted_at TEXT,
+            last_seen_at TEXT,
             status TEXT DEFAULT 'new',
             followup1_due TEXT,
             followup2_due TEXT,
@@ -83,6 +84,7 @@ def ensure_offer_columns(cur: sqlite3.Cursor) -> None:
         "origin_code": "TEXT",
         "offres_manque_candidats": "INTEGER",
         "raw_json": "TEXT",
+        "last_seen_at": "TEXT",
     }
     for name, typ in wanted.items():
         if name not in cols:
@@ -103,8 +105,8 @@ def upsert_offers(offers: Iterable[dict[str, Any]]) -> int:
                 description, rome_codes, keywords,
                 contract_type, published_at, source, url, apply_url, salary,
                 origin_code, offres_manque_candidats,
-                score, inserted_at, raw_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                score, inserted_at, last_seen_at, raw_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(offer_id) DO UPDATE SET
                 score=excluded.score,
                 title=excluded.title,
@@ -116,11 +118,16 @@ def upsert_offers(offers: Iterable[dict[str, Any]]) -> int:
                 latitude=excluded.latitude,
                 longitude=excluded.longitude,
                 description=excluded.description,
+                rome_codes=excluded.rome_codes,
+                keywords=excluded.keywords,
+                contract_type=excluded.contract_type,
+                published_at=excluded.published_at,
                 url=excluded.url,
                 apply_url=excluded.apply_url,
                 salary=excluded.salary,
                 origin_code=excluded.origin_code,
-                offres_manque_candidats=COALESCE(excluded.offres_manque_candidats, offres_manque_candidats)
+                offres_manque_candidats=COALESCE(excluded.offres_manque_candidats, offres_manque_candidats),
+                last_seen_at=excluded.last_seen_at
             ;
             """,
             (
@@ -145,6 +152,7 @@ def upsert_offers(offers: Iterable[dict[str, Any]]) -> int:
                 o.get("origin_code"),
                 o.get("offres_manque_candidats"),
                 float(o.get("score", 0)),
+                now,
                 now,
                 o.get("raw_json"),
             ),

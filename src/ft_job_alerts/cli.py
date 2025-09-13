@@ -163,7 +163,7 @@ def cmd_fetch(args):
     # Filter + score
     base_lat = 47.76
     base_lon = 7.34
-    prepared: list[dict[str, Any]] = []
+    prepared_map: dict[str, dict[str, Any]] = {}
     for r in raw:
         n = normalize_offer(r)
         if not n["offer_id"]:
@@ -178,7 +178,9 @@ def cmd_fetch(args):
             n["raw_json"] = _json.dumps(r, ensure_ascii=False)
         except Exception:
             n["raw_json"] = None
-        prepared.append(n)
+        # Deduplicate by offer_id within this batch (keep last occurrence)
+        prepared_map[n["offer_id"]] = n
+    prepared: list[dict[str, Any]] = list(prepared_map.values())
 
     inserted = upsert_offers(prepared)
     print(f"Prepared: {len(prepared)} offers; inserted/updated: {inserted}")
@@ -273,7 +275,7 @@ def cmd_sweep(args):
             )
             if not raw:
                 break
-            prepared: list[dict[str, Any]] = []
+            prepared_map: dict[str, dict[str, Any]] = {}
             for r in raw:
                 n = normalize_offer(r)
                 if not n["offer_id"]:
@@ -286,7 +288,8 @@ def cmd_sweep(args):
                     n["raw_json"] = _json.dumps(r, ensure_ascii=False)
                 except Exception:
                     n["raw_json"] = None
-                prepared.append(n)
+                prepared_map[n["offer_id"]] = n
+            prepared = list(prepared_map.values())
             total_prepared += len(prepared)
             upsert_offers(prepared)
             if len(raw) < args.limit:

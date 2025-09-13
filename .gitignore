@@ -18,3 +18,7 @@ data/out/**
 
 # OS
 .DS_Store
+
+# Repo agent guide (ignore local copy)
+AGENTS.md
+AGENT.md
