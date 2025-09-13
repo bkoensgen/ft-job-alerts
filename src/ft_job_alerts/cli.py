@@ -17,69 +17,11 @@ from .tags import compute_labels
 from .nlp import tokenize, bigrams, log_odds_with_prior
 from .storage import update_offer_details
 from .charts import build_charts
+from .normalizer import normalize_offer
+from .cli_utils import dedup_and_prepare_offers, sanitize_published_since
 
 
-def normalize_offer(o: dict[str, Any]) -> dict[str, Any]:
-    # Normalize a raw API offer into our storage format
-    oid = str(o.get("id") or o.get("offerId") or o.get("reference") or o.get("idOffre") or "")
-    title = o.get("intitule") or o.get("title") or ""
-    company = (o.get("entreprise") or {}).get("nom") if isinstance(o.get("entreprise"), dict) else (o.get("company") or "")
-    city = ""
-    department = ""
-    postal_code = ""
-    latitude = None
-    longitude = None
-    location = None
-    if isinstance(o.get("lieuTravail"), dict):
-        lt = o["lieuTravail"]
-        city = lt.get("libelle") or lt.get("ville") or ""
-        department = lt.get("departement") or lt.get("codePostal", "")[:2]
-        postal_code = lt.get("codePostal") or ""
-        latitude = lt.get("latitude")
-        longitude = lt.get("longitude")
-        location = f"{city} ({department})".strip()
-    else:
-        location = o.get("location") or ""
-
-    contract = o.get("typeContrat") or o.get("contractType") or ""
-    published = o.get("dateCreation") or o.get("publishedAt") or o.get("publication") or ""
-    url = None
-    if isinstance(o.get("origineOffre"), dict):
-        url = o["origineOffre"].get("urlOrigine") or o["origineOffre"].get("url")
-        origin_code = o["origineOffre"].get("origine")
-    else:
-        origin_code = None
-    if not url:
-        url = o.get("url") or ""
-    apply_url = o.get("lienPostuler") or url
-    salary = o.get("salaire", {}).get("libelle") if isinstance(o.get("salaire"), dict) else (o.get("salary") or "")
-    description = o.get("description") or ""
-    shortage = o.get("offresManqueCandidats")
-
-    return {
-        "offer_id": oid,
-        "title": title,
-        "company": company or "",
-        "location": location or "",
-        "contract_type": contract or "",
-        "published_at": published or "",
-        # Fallback to candidate site detail page if URL missing
-        "url": (url or (f"https://candidat.francetravail.fr/offres/recherche/detail/{oid}" if oid else "")),
-        "apply_url": apply_url or "",
-        "salary": salary or "",
-        "description": description or "",
-        "origin_code": origin_code,
-        "offres_manque_candidats": int(bool(shortage)) if shortage is not None else None,
-        "city": city or "",
-        "department": department or "",
-        "postal_code": postal_code or "",
-        "latitude": latitude,
-        "longitude": longitude,
-        # filled later
-        "rome_codes": [],
-        "keywords": [],
-        "score": 0.0,
-    }
+"""CLI entry with subcommands. Most helpers are factored in normalizer/cli_utils modules."""
 
 
 def cmd_init_db(_args):
@@ -122,13 +64,9 @@ def cmd_fetch(args):
         print("[warn] --distance-km/--radius-km est ignoré si --commune n'est pas fourni (API FT)")
 
     # Normalize publieeDepuis to allowed values (1,3,7,14,31)
-    pdays = args.published_since_days
-    if pdays is not None:
-        allowed = [1, 3, 7, 14, 31]
-        if pdays not in allowed:
-            nearest = min(allowed, key=lambda x: abs(x - pdays))
-            print(f"[warn] publieeDepuis={pdays} non supporté; utilisation de {nearest} (valeurs permises: 1,3,7,14,31)")
-            pdays = nearest
+    pdays = sanitize_published_since(args.published_since_days)
+    if args.published_since_days is not None and pdays != args.published_since_days:
+        print(f"[warn] publieeDepuis={args.published_since_days} non supporté; utilisation de {pdays} (valeurs permises: 1,3,7,14,31)")
 
     def do_page(page: int) -> list[dict[str, Any]]:
         return client.search(
@@ -163,24 +101,14 @@ def cmd_fetch(args):
     # Filter + score
     base_lat = 47.76
     base_lon = 7.34
-    prepared_map: dict[str, dict[str, Any]] = {}
-    for r in raw:
-        n = normalize_offer(r)
-        if not n["offer_id"]:
-            continue
-        if not is_relevant(n["title"], n.get("description")):
-            continue
-        n["rome_codes"] = rome_codes
-        n["keywords"] = keywords
-        n["score"] = score_offer(r, base_lat=base_lat, base_lon=base_lon)
-        try:
-            import json as _json
-            n["raw_json"] = _json.dumps(r, ensure_ascii=False)
-        except Exception:
-            n["raw_json"] = None
-        # Deduplicate by offer_id within this batch (keep last occurrence)
-        prepared_map[n["offer_id"]] = n
-    prepared: list[dict[str, Any]] = list(prepared_map.values())
+    prepared = dedup_and_prepare_offers(
+        raw,
+        rome_codes=rome_codes,
+        keywords=keywords,
+        base_lat=base_lat,
+        base_lon=base_lon,
+        apply_relevance=True,
+    )
 
     inserted = upsert_offers(prepared)
     print(f"Prepared: {len(prepared)} offers; inserted/updated: {inserted}")
@@ -275,21 +203,14 @@ def cmd_sweep(args):
             )
             if not raw:
                 break
-            prepared_map: dict[str, dict[str, Any]] = {}
-            for r in raw:
-                n = normalize_offer(r)
-                if not n["offer_id"]:
-                    continue
-                n["rome_codes"] = []
-                n["keywords"] = [kw]
-                n["score"] = score_offer(r, base_lat=base_lat, base_lon=base_lon)
-                try:
-                    import json as _json
-                    n["raw_json"] = _json.dumps(r, ensure_ascii=False)
-                except Exception:
-                    n["raw_json"] = None
-                prepared_map[n["offer_id"]] = n
-            prepared = list(prepared_map.values())
+            prepared = dedup_and_prepare_offers(
+                raw,
+                rome_codes=[],
+                keywords=[kw],
+                base_lat=base_lat,
+                base_lon=base_lon,
+                apply_relevance=False,
+            )
             total_prepared += len(prepared)
             upsert_offers(prepared)
             if len(raw) < args.limit:

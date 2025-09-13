@@ -19,6 +19,12 @@ def connect() -> sqlite3.Connection:
     ensure_dirs()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    try:
+        # Reasonable defaults for local apps
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+    except Exception:
+        pass
     return conn
 
 
@@ -60,6 +66,10 @@ def init_db() -> None:
 
         CREATE INDEX IF NOT EXISTS idx_offers_status ON offers(status);
         CREATE INDEX IF NOT EXISTS idx_offers_published_at ON offers(published_at);
+        CREATE INDEX IF NOT EXISTS idx_offers_inserted_at ON offers(inserted_at);
+        CREATE INDEX IF NOT EXISTS idx_offers_score ON offers(score);
+        CREATE INDEX IF NOT EXISTS idx_offers_followups ON offers(status, followup1_due, followup2_due);
+        CREATE INDEX IF NOT EXISTS idx_offers_department ON offers(department);
         """
     )
     # Migrations for older DBs: add columns if missing

@@ -7,6 +7,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 from urllib.error import HTTPError
+import time
 
 from .auth import AuthClient
 from .config import Config
@@ -16,6 +17,32 @@ class OffresEmploiClient:
     def __init__(self, cfg: Config, auth: AuthClient):
         self.cfg = cfg
         self.auth = auth
+
+    def _do_request(self, req: urllib.request.Request, *, retries: int = 3, backoff: float = 0.5) -> str:
+        last_err: Exception | None = None
+        for attempt in range(retries):
+            try:
+                with urllib.request.urlopen(req, timeout=20) as resp:
+                    return resp.read().decode("utf-8")
+            except HTTPError as e:
+                code = getattr(e, 'code', 0)
+                body = ''
+                try:
+                    body = e.read().decode("utf-8")
+                except Exception:
+                    pass
+                # retry on 429 and 5xx
+                if code in (429,) or 500 <= code < 600:
+                    last_err = RuntimeError(f"HTTP {code}: {body}")
+                    time.sleep(backoff * (2 ** attempt))
+                    continue
+                raise RuntimeError(f"HTTP {code}: {body}")
+            except Exception as e:
+                last_err = e
+                time.sleep(backoff * (2 ** attempt))
+        if last_err:
+            raise last_err
+        return ""
 
     def search(
         self,
@@ -80,14 +107,9 @@ class OffresEmploiClient:
             if use_range_header:
                 print("[debug] Header Range:", f"{start}-{end}")
         try:
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                raw = resp.read().decode("utf-8")
-        except HTTPError as e:
-            try:
-                body = e.read().decode("utf-8")
-            except Exception:
-                body = ""
-            raise RuntimeError(f"Offres search failed ({e.code}) for URL: {url}\nBody: {body}")
+            raw = self._do_request(req)
+        except Exception as e:
+            raise RuntimeError(f"Offres search failed for URL: {url}\n{e}")
         obj = json.loads(raw) if raw else {}
         # The exact structure may vary; normalize to a list of offers
         if isinstance(obj, dict) and "resultats" in obj:
@@ -118,15 +140,10 @@ class OffresEmploiClient:
         if self.cfg.accept_language:
             req.add_header("Accept-Language", self.cfg.accept_language)
         try:
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                raw = resp.read().decode("utf-8")
+            raw = self._do_request(req)
             return json.loads(raw) if raw else {}
-        except HTTPError as e:
-            try:
-                body = e.read().decode("utf-8")
-            except Exception:
-                body = ""
-            raise RuntimeError(f"Offres detail failed ({e.code}) for {offer_id}: {body}")
+        except Exception as e:
+            raise RuntimeError(f"Offres detail failed for {offer_id}: {e}")
 
 
 class ROMEClient:

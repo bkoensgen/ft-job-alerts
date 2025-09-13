@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ft-job-alerts"
+version = "0.1.0"
+description = "France Travail job alerts pipeline (simulate or real API)"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "Benjamin", email = "" }
+]
+license = { text = "Proprietary" }
+
+[project.scripts]
+ft-job-alerts = "ft_job_alerts.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["ft_job_alerts*"]
