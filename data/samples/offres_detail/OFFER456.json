@@ -1,8 +1,0 @@
-{
-  "id": "OFFER456",
-  "description": "Participation au développement ROS, ROS2 et drivers capteurs (Lidar, caméras). Environnement C++ moderne (C++17/20), CI/CD, MoveIt, Gazebo. Travail sur la navigation, perception, calibration et intégration matérielle.",
-  "lienPostuler": "https://www.example.com/candidature/OFFER456",
-  "salaire": {"libelle": "30-38k€"},
-  "origineOffre": {"url": "https://www.example.com/offres/OFFER456"}
-}
-

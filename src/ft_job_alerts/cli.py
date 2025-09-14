@@ -142,6 +142,7 @@ def cmd_export(args):
         to_date=args.to_date,
         status=args.status,
         min_score=args.min_score,
+        min_salary_monthly=getattr(args, "min_salary_monthly", None),
         limit=args.limit,
         order_by="score_desc",
     )
@@ -791,6 +792,14 @@ def cmd_tui(_args):
     fmt = ask("  Format d'export (txt/md/csv/jsonl)", "md").lower() or "md"
     full_desc = fmt in ("md", "txt") and ask_yes("  Inclure la description complète ?", True)
     desc_chars = -1 if full_desc else (500 if fmt == "md" else 400)
+    # Salary filter
+    min_salary_monthly = None
+    ans = ask("  Rémunération minimum (€/mois) — laisser vide pour ignorer", "").strip()
+    if ans:
+        try:
+            min_salary_monthly = float(ans.replace(",", "."))
+        except Exception:
+            min_salary_monthly = None
 
     # Summary
     print("\nRésumé:")
@@ -836,6 +845,7 @@ def cmd_tui(_args):
         to_date=None,
         status=None,
         min_score=None,
+        min_salary_monthly=min_salary_monthly,
         limit=topn,
         order_by="score_desc",
     )
@@ -931,6 +941,8 @@ def build_parser() -> argparse.ArgumentParser:
     s_export.add_argument("--to", dest="to_date", default=None, help="To date YYYY-MM-DD (inserted_at)")
     s_export.add_argument("--status", default=None, help="Filter by status (new,applied,rejected,to_follow)")
     s_export.add_argument("--min-score", dest="min_score", type=float, default=None)
+    s_export.add_argument("--min-salary-monthly", dest="min_salary_monthly", type=float, default=None,
+                         help="Filter by minimum monthly salary in EUR (derived heuristically from text)")
     s_export.add_argument("--top", dest="limit", type=int, default=100)
     s_export.add_argument("--outfile", default=None, help="Output path; defaults to data/out/…")
     s_export.add_argument("--desc-chars", dest="desc_chars", type=int, default=400,

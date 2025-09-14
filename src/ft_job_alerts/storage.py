@@ -52,6 +52,7 @@ def init_db() -> None:
             url TEXT,
             apply_url TEXT,
             salary TEXT,
+            salary_min_monthly_eur REAL,
             origin_code TEXT,
             offres_manque_candidats INTEGER,
             score REAL DEFAULT 0,
@@ -70,6 +71,7 @@ def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_offers_score ON offers(score);
         CREATE INDEX IF NOT EXISTS idx_offers_followups ON offers(status, followup1_due, followup2_due);
         CREATE INDEX IF NOT EXISTS idx_offers_department ON offers(department);
+        CREATE INDEX IF NOT EXISTS idx_offers_salary_min ON offers(salary_min_monthly_eur);
         """
     )
     # Migrations for older DBs: add columns if missing
@@ -91,6 +93,7 @@ def ensure_offer_columns(cur: sqlite3.Cursor) -> None:
         "longitude": "REAL",
         "description": "TEXT",
         "apply_url": "TEXT",
+        "salary_min_monthly_eur": "REAL",
         "origin_code": "TEXT",
         "offres_manque_candidats": "INTEGER",
         "raw_json": "TEXT",
@@ -106,17 +109,28 @@ def upsert_offers(offers: Iterable[dict[str, Any]]) -> int:
     cur = con.cursor()
     now = dt.datetime.utcnow().isoformat()
     inserted = 0
+    # lazy import to avoid cycles
+    try:
+        from .salary import parse_salary_min_monthly
+    except Exception:
+        parse_salary_min_monthly = lambda s: None  # type: ignore
     for o in offers:
+        s_txt = o.get("salary") or o.get("description") or ""
+        s_min = None
+        try:
+            s_min = parse_salary_min_monthly(str(s_txt))
+        except Exception:
+            s_min = None
         cur.execute(
             """
             INSERT INTO offers (
                 offer_id, title, company, location,
                 city, department, postal_code, latitude, longitude,
                 description, rome_codes, keywords,
-                contract_type, published_at, source, url, apply_url, salary,
+                contract_type, published_at, source, url, apply_url, salary, salary_min_monthly_eur,
                 origin_code, offres_manque_candidats,
                 score, inserted_at, last_seen_at, raw_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(offer_id) DO UPDATE SET
                 score=excluded.score,
                 title=excluded.title,
@@ -135,6 +149,7 @@ def upsert_offers(offers: Iterable[dict[str, Any]]) -> int:
                 url=excluded.url,
                 apply_url=excluded.apply_url,
                 salary=excluded.salary,
+                salary_min_monthly_eur=COALESCE(excluded.salary_min_monthly_eur, salary_min_monthly_eur),
                 origin_code=excluded.origin_code,
                 offres_manque_candidats=COALESCE(excluded.offres_manque_candidats, offres_manque_candidats),
                 last_seen_at=excluded.last_seen_at
@@ -159,6 +174,7 @@ def upsert_offers(offers: Iterable[dict[str, Any]]) -> int:
                 o.get("url"),
                 o.get("apply_url"),
                 o.get("salary"),
+                s_min,
                 o.get("origin_code"),
                 o.get("offres_manque_candidats"),
                 float(o.get("score", 0)),
@@ -247,6 +263,7 @@ def query_offers(
     to_date: str | None = None,
     status: str | None = None,
     min_score: float | None = None,
+    min_salary_monthly: float | None = None,
     limit: int = 100,
     order_by: str = "score_desc",
 ) -> list[sqlite3.Row]:
@@ -278,6 +295,9 @@ def query_offers(
     if min_score is not None:
         where.append("score >= ?")
         params.append(float(min_score))
+    if min_salary_monthly is not None:
+        where.append("(salary_min_monthly_eur IS NOT NULL AND salary_min_monthly_eur >= ?)")
+        params.append(float(min_salary_monthly))
 
     order_sql = {
         "score_desc": "score DESC, inserted_at DESC",
@@ -300,6 +320,13 @@ def update_offer_details(offer_id: str, fields: dict[str, Any]) -> None:
         return
     con = connect()
     cur = con.cursor()
+    # compute derived salary if needed
+    if "salary" in fields:
+        try:
+            from .salary import parse_salary_min_monthly
+            fields["salary_min_monthly_eur"] = parse_salary_min_monthly(str(fields.get("salary") or ""))
+        except Exception:
+            pass
     cols = []
     params: list[Any] = []
     for k, v in fields.items():

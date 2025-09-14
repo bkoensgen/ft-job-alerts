@@ -114,7 +114,7 @@ class App(ttk.Frame):
         frm_loc.columnconfigure(1, weight=1)
 
         # Time & Export
-        frm_tx = ttk.LabelFrame(self, text="Fenêtre et export")
+        frm_tx = ttk.LabelFrame(self, text="Fenêtre, rémunération et export")
         frm_tx.pack(fill=tk.X, padx=10, pady=8)
         ttk.Label(frm_tx, text="Jours (1,3,7,14,31):").grid(row=0, column=0, sticky="e")
         self.ent_days = ttk.Entry(frm_tx, width=6)
@@ -129,6 +129,10 @@ class App(ttk.Frame):
         ttk.OptionMenu(frm_tx, self.var_fmt, "md", "md", "txt", "csv", "jsonl").grid(row=0, column=5, sticky="w")
         self.var_full = tk.BooleanVar(value=True)
         ttk.Checkbutton(frm_tx, text="Description complète (txt/md)", variable=self.var_full).grid(row=0, column=6, sticky="w", padx=6)
+        # Salary min
+        ttk.Label(frm_tx, text="Salaire min (€/mois):").grid(row=1, column=0, sticky="e")
+        self.ent_salary = ttk.Entry(frm_tx, width=10)
+        self.ent_salary.grid(row=1, column=1, sticky="w", padx=6)
 
         # Buttons
         frm_btn = ttk.Frame(self)
@@ -189,6 +193,10 @@ class App(ttk.Frame):
             topn = 100
         fmt = self.var_fmt.get().lower()
         desc_chars = -1 if self.var_full.get() and fmt in ("md", "txt") else (500 if fmt == "md" else 400)
+        try:
+            min_salary = float(self.ent_salary.get().strip().replace(",", ".")) if self.ent_salary.get().strip() else None
+        except Exception:
+            min_salary = None
 
         return dict(
             keywords=kw,
@@ -199,6 +207,7 @@ class App(ttk.Frame):
             topn=topn,
             fmt=fmt,
             desc_chars=desc_chars,
+            min_salary=min_salary,
         )
 
     def _on_run(self):
@@ -244,6 +253,7 @@ class App(ttk.Frame):
                 to_date=None,
                 status=None,
                 min_score=None,
+                min_salary_monthly=params.get("min_salary"),
                 limit=params["topn"],
                 order_by="score_desc",
             )
@@ -285,4 +295,3 @@ def main(argv: list[str] | None = None) -> None:
         pass
     App(root)
     root.mainloop()
-
