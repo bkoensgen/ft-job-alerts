@@ -1,0 +1,22 @@
+[
+  {
+    "id": "OFFER123",
+    "intitule": "Ingénieur robotique junior ROS2/C++",
+    "entreprise": {"nom": "RoboTech"},
+    "lieuTravail": {"libelle": "Mulhouse", "departement": "68", "codePostal": "68100", "latitude": 47.75, "longitude": 7.34},
+    "typeContrat": "CDI",
+    "dateCreation": "2025-09-10T10:00:00Z",
+    "origineOffre": {"urlOrigine": "https://example.com/offer/123", "origine": "1"},
+    "description": "Développement ROS2 (rclcpp), vision (OpenCV), navigation. Salaire: 34k€ annuel."
+  },
+  {
+    "id": "OFFER456",
+    "intitule": "Technicien vision industrielle",
+    "entreprise": {"nom": "VisioCorp"},
+    "lieuTravail": {"libelle": "Strasbourg", "departement": "67", "codePostal": "67000", "latitude": 48.58, "longitude": 7.75},
+    "typeContrat": "CDD",
+    "dateCreation": "2025-09-08T09:00:00Z",
+    "origineOffre": {"urlOrigine": "https://example.com/offer/456", "origine": "2"},
+    "description": "Vision industrielle (OpenCV/Halcon), robot ABB/KUKA. Rémunération: 2500 € / mois."
+  }
+]

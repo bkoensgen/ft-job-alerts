@@ -1,0 +1,12 @@
+{
+  "id": "OFFER456",
+  "intitule": "Technicien vision industrielle",
+  "entreprise": {"nom": "VisioCorp"},
+  "lieuTravail": {"libelle": "Strasbourg", "departement": "67", "codePostal": "67000", "latitude": 48.58, "longitude": 7.75},
+  "typeContrat": "CDD",
+  "dateCreation": "2025-09-08T09:00:00Z",
+  "origineOffre": {"urlOrigine": "https://example.com/offer/456", "origine": "2"},
+  "description": "Intégration vision (Cognex/Halcon), robot ABB/KUKA. Rémunération 2500 € / mois.",
+  "lienPostuler": "https://example.com/apply/456",
+  "salaire": {"libelle": "2500 € / mois"}
+}
