@@ -44,4 +44,3 @@ def dedup_and_prepare_offers(
             n["raw_json"] = None
         prepared_map[oid] = n
     return list(prepared_map.values())
-

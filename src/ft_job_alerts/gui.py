@@ -27,6 +27,18 @@ CATEGORIES: List[tuple[str, list[str]]] = [
     ("Capteurs", ["lidar", "camera", "imu"]),
 ]
 
+# Domain templates for non-robotics users
+DOMAINS: List[tuple[str, List[str]]] = [
+    ("Custom (libre)", []),
+    ("Robotique (ROS/vision)", ["ros2", "ros", "robotique", "vision", "c++"]),
+    ("Software (général)", ["python", "java", "javascript", "backend", "fullstack"]),
+    ("Data / IA", ["data", "python", "pandas", "sql", "machine learning"]),
+    ("Automatisme / PLC", ["automatisme", "plc", "siemens", "twincat", "grafcet"]),
+    ("Logistique", ["logistique", "supply chain", "magasinier", "cariste"]),
+    ("Finance / Comptabilité", ["comptable", "audit", "finance"]),
+    ("Santé", ["infirmier", "infirmière", "aide soignant"]),
+]
+
 
 def _open_folder(path: str) -> None:
     try:
@@ -72,15 +84,21 @@ class App(ttk.Frame):
         mode = "SIMULATE (local)" if self.cfg.api_simulate else "REAL API"
         ttk.Label(top, text=f"Mode: {mode}").pack(side=tk.LEFT)
 
-        # Categories
-        frm_cat = ttk.LabelFrame(self, text="Catégories")
+        # Domain & Categories
+        frm_cat = ttk.LabelFrame(self, text="Domaine et catégories")
         frm_cat.pack(fill=tk.X, padx=10, pady=8)
+        ttk.Label(frm_cat, text="Domaine:").grid(row=0, column=0, sticky="e")
+        self.var_domain = tk.StringVar(value=DOMAINS[1][0])
+        self.opt_domain = ttk.OptionMenu(frm_cat, self.var_domain, DOMAINS[1][0], *[d[0] for d in DOMAINS], command=lambda *_: self._apply_domain_defaults())
+        self.opt_domain.grid(row=0, column=1, sticky="w", padx=6)
+        self.var_smart = tk.BooleanVar(value=True)
+        ttk.Checkbutton(frm_cat, text="Filtre intelligent (robotique)", variable=self.var_smart).grid(row=0, column=2, sticky="w", padx=8)
         self.var_cats: list[tk.BooleanVar] = []
         for i, (label, _kw) in enumerate(CATEGORIES):
             var = tk.BooleanVar(value=False)
             self.var_cats.append(var)
             cb = ttk.Checkbutton(frm_cat, text=label, variable=var)
-            cb.grid(row=i // 2, column=i % 2, sticky="w", padx=6, pady=2)
+            cb.grid(row=1 + (i // 2), column=i % 2, sticky="w", padx=6, pady=2)
 
         # Keywords extra
         frm_kw = ttk.Frame(self)
@@ -146,6 +164,29 @@ class App(ttk.Frame):
         self.log = ScrolledText(self, height=16)
         self.log.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
         self._log("Prêt. Sélectionnez vos options puis cliquez sur Lancer.")
+        # Initialize defaults based on domain
+        self._apply_domain_defaults()
+
+    def _apply_domain_defaults(self):
+        label = self.var_domain.get() if hasattr(self, 'var_domain') else DOMAINS[1][0]
+        # Reset categories
+        if hasattr(self, 'var_cats'):
+            for v in self.var_cats:
+                v.set(False)
+        # For robotics, enable smart filter and suggest a few keywords
+        if label.startswith("Robotique"):
+            self.var_smart.set(True)
+            if hasattr(self, 'ent_kw'):
+                self.ent_kw.delete(0, tk.END)
+                self.ent_kw.insert(0, ", ".join(["ros2", "c++", "vision"]))
+        else:
+            self.var_smart.set(False)
+            # Prefill domain keywords
+            for name, kws in DOMAINS:
+                if name == label and hasattr(self, 'ent_kw'):
+                    self.ent_kw.delete(0, tk.END)
+                    self.ent_kw.insert(0, ", ".join(kws))
+                    break
 
     def _copy_prompt(self):
         text = _ai_prompt_text("<votre-fichier-export>.")
@@ -208,6 +249,7 @@ class App(ttk.Frame):
             fmt=fmt,
             desc_chars=desc_chars,
             min_salary=min_salary,
+            smart_filter=self.var_smart.get() if hasattr(self, 'var_smart') else True,
         )
 
     def _on_run(self):
@@ -243,6 +285,7 @@ class App(ttk.Frame):
                 origine_offre=None,
                 fetch_all=True,
                 max_pages=10,
+                no_smart_filter=not bool(params.get("smart_filter", True)),
             )
             cmd_fetch(fargs)
 

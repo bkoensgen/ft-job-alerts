@@ -107,7 +107,7 @@ def cmd_fetch(args):
         keywords=keywords,
         base_lat=base_lat,
         base_lon=base_lon,
-        apply_relevance=True,
+        apply_relevance=not bool(getattr(args, "no_smart_filter", False)),
     )
 
     inserted = upsert_offers(prepared)
@@ -727,6 +727,18 @@ def cmd_tui(_args):
         ("Capteurs", ["lidar", "camera", "imu"]),
     ]
 
+    # Domain templates for non-robotics users
+    domains = [
+        ("Custom (libre)", []),
+        ("Robotique (ROS/vision)", ["ros2", "ros", "robotique", "vision", "c++"]),
+        ("Software (général)", ["python", "java", "javascript", "backend", "fullstack"]),
+        ("Data / IA", ["data", "python", "pandas", "sql", "machine learning"]),
+        ("Automatisme / PLC", ["automatisme", "plc", "siemens", "twincat", "grafcet"]),
+        ("Logistique", ["logistique", "supply chain", "magasinier", "cariste"]),
+        ("Finance / Comptabilité", ["comptable", "audit", "finance"]),
+        ("Santé", ["infirmier", "infirmière", "aide soignant"]),
+    ]
+
     def ask(prompt: str, default: str | None = None) -> str:
         sfx = f" [{default}]" if default is not None else ""
         val = input(f"{prompt}{sfx}: ").strip()
@@ -740,21 +752,34 @@ def cmd_tui(_args):
         return v in ("y", "yes", "o", "oui")
 
     # Categories selection
-    print("Choisissez des catégories (ex: 1,3,5). Laissez vide pour utiliser les mots-clés par défaut.")
-    for i, (label, _) in enumerate(categories, start=1):
+    print("Choisissez un domaine (ex: 2 pour Robotique).")
+    for i, (label, _kw) in enumerate(domains, start=1):
         print(f"  {i}) {label}")
-    sel = input("Votre sélection: ").strip()
+    try:
+        dom_sel = int(input("Votre choix: ").strip() or "2")
+    except Exception:
+        dom_sel = 2
+    dom_sel = max(1, min(dom_sel, len(domains)))
+    domain_label, domain_kw = domains[dom_sel - 1]
+
     selected_keywords: list[str] = []
-    if sel:
-        try:
-            ids = [int(x) for x in sel.replace(" ", "").split(",") if x]
-            for i in ids:
-                if 1 <= i <= len(categories):
-                    selected_keywords.extend(categories[i - 1][1])
-        except Exception:
-            pass
-    if not selected_keywords:
-        selected_keywords = cfg.default_keywords
+    if dom_sel == 2:  # Robotique: proposer les catégories fines
+        print("\nCatégories (ex: 1,3,5). Laissez vide pour mots-clés par défaut du domaine.")
+        for i, (label, _) in enumerate(categories, start=1):
+            print(f"  {i}) {label}")
+        sel = input("Votre sélection: ").strip()
+        if sel:
+            try:
+                ids = [int(x) for x in sel.replace(" ", "").split(",") if x]
+                for i in ids:
+                    if 1 <= i <= len(categories):
+                        selected_keywords.extend(categories[i - 1][1])
+            except Exception:
+                pass
+        if not selected_keywords:
+            selected_keywords = domain_kw or cfg.default_keywords
+    else:
+        selected_keywords = domain_kw or []
     extra_kw = ask("Mots-clés supplémentaires (séparés par des virgules)", "").strip()
     if extra_kw:
         selected_keywords.extend([k.strip() for k in extra_kw.split(",") if k.strip()])
@@ -792,6 +817,8 @@ def cmd_tui(_args):
     fmt = ask("  Format d'export (txt/md/csv/jsonl)", "md").lower() or "md"
     full_desc = fmt in ("md", "txt") and ask_yes("  Inclure la description complète ?", True)
     desc_chars = -1 if full_desc else (500 if fmt == "md" else 400)
+    # Smart filter (robotique)
+    use_smart = dom_sel == 2 and ask_yes("  Appliquer le filtre intelligent (robotique/ROS) ?", True)
     # Salary filter
     min_salary_monthly = None
     ans = ask("  Rémunération minimum (€/mois) — laisser vide pour ignorer", "").strip()
@@ -833,6 +860,7 @@ def cmd_tui(_args):
         origine_offre=None,
         fetch_all=True,
         max_pages=10,
+        no_smart_filter=not use_smart,
     )
     print("\n[1/2] Récupération des offres…")
     cmd_fetch(fargs)
@@ -917,6 +945,8 @@ def build_parser() -> argparse.ArgumentParser:
     s_fetch.add_argument("--all", dest="fetch_all", action="store_true", help="Fetch all pages until exhausted")
     s_fetch.add_argument("--max-pages", dest="max_pages", type=int, default=10,
                          help="Max pages when using --all")
+    s_fetch.add_argument("--no-smart-filter", action="store_true",
+                         help="Désactive le filtre intelligent orienté robotique (utilise seulement les mots-clés)")
     s_fetch.set_defaults(func=cmd_fetch)
 
     s_run = sub.add_parser("run-daily", help="Fetch + notify new and follow-ups")
