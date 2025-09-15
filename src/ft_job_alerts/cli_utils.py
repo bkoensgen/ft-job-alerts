@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 import math
+import re
 
 from .filters import is_relevant
 from .normalizer import normalize_offer
@@ -46,6 +47,7 @@ def dedup_and_prepare_offers(
     center_lat: float | None = None,
     center_lon: float | None = None,
     max_distance_km: float | None = None,
+    require_all: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Normalize raw offers, optionally filter by relevance, score, attach metadata and deduplicate by offer_id."""
     prepared_map: dict[str, dict[str, Any]] = {}
@@ -62,8 +64,28 @@ def dedup_and_prepare_offers(
         oid = n.get("offer_id")
         if not oid:
             continue
+        # Optional semantic relevance
         if apply_relevance and not is_relevant(n.get("title", ""), n.get("description")):
             continue
+        # Optional AND filter for keywords
+        if require_all:
+            text = f"{n.get('title','')}\n{n.get('description','')}"
+            ok = True
+            for t in require_all:
+                tt = str(t).strip()
+                if not tt:
+                    continue
+                # smart word-boundary: if token is alnum only, use \b; else fallback to simple case-insensitive contains
+                if re.fullmatch(r"[A-Za-z0-9]+", tt):
+                    if not re.search(rf"\b{re.escape(tt)}\b", text, flags=re.IGNORECASE):
+                        ok = False
+                        break
+                else:
+                    if re.search(re.escape(tt), text, flags=re.IGNORECASE) is None:
+                        ok = False
+                        break
+            if not ok:
+                continue
         # Optional strict radius filter (applied client-side)
         if max_distance_km is not None and center_lat is not None and center_lon is not None:
             lat = n.get("latitude")

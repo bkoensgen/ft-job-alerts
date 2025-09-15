@@ -86,7 +86,12 @@ class App(ttk.Frame):
         # Keywords extra
         frm_kw = ttk.Frame(self)
         frm_kw.pack(fill=tk.X, padx=10, pady=4)
-        ttk.Label(frm_kw, text="Mots-clés (séparés par des virgules):").pack(anchor="w")
+        top_kw = ttk.Frame(frm_kw)
+        top_kw.pack(fill=tk.X)
+        ttk.Label(top_kw, text="Mots-clés (séparés par des virgules):").pack(anchor="w", side=tk.LEFT)
+        ttk.Label(top_kw, text="Mode:").pack(side=tk.LEFT, padx=(12,4))
+        self.var_kw_mode = tk.StringVar(value="or")
+        ttk.OptionMenu(top_kw, self.var_kw_mode, "or", "or", "and").pack(side=tk.LEFT)
         self.ent_kw = ttk.Entry(frm_kw)
         self.ent_kw.pack(fill=tk.X)
         self.lbl_kw_hint = ttk.Label(frm_kw, text="", foreground="#777")
@@ -301,6 +306,7 @@ class App(ttk.Frame):
             # Fetch
             fargs = Namespace(
                 keywords=",".join(params["keywords"]),
+                keywords_mode=self.var_kw_mode.get() if hasattr(self, 'var_kw_mode') else "or",
                 rome=None,
                 auto_rome=False,
                 dept=params["dept"],

@@ -114,6 +114,10 @@ def cmd_fetch(args):
             print("[warn] Centre géographique non résolu pour la commune — filtre rayon non appliqué côté client.")
     # Apply strict client-side radius only in simulate mode (server already filters in real API)
     use_client_radius = bool(cfg.api_simulate and center_lat is not None and center_lon is not None and distance_km is not None)
+    # AND/OR matching mode for keywords (client-side)
+    kw_mode = getattr(args, "keywords_mode", "or").lower()
+    require_all = keywords if kw_mode == "and" else None
+
     prepared = dedup_and_prepare_offers(
         raw,
         rome_codes=rome_codes,
@@ -124,6 +128,7 @@ def cmd_fetch(args):
         center_lat=center_lat if use_client_radius else None,
         center_lon=center_lon if use_client_radius else None,
         max_distance_km=(distance_km if use_client_radius else None),
+        require_all=require_all,
     )
 
     inserted = upsert_offers(prepared)

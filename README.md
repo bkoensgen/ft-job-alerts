@@ -186,3 +186,7 @@ Profiles and categories (optional)
   - TUI with a profile: `python run.py tui --profile mon_profil`
   - Pipelines: `python run.py pipeline daily --profile mon_profil` (override keywords/localisation)
 - If the file is missing, built‑in defaults are used.
+Keyword logic (AND/OR)
+- Default is OR: any of the comma-separated tokens may match.
+- AND mode: require all tokens to appear in the offer text. GUI: set Mode=and. CLI: `--keywords-mode and`.
+- Multiple groups OR: use the `sweep` command with `--keywords-list "group1;group2;…"` to run several queries and merge results.
