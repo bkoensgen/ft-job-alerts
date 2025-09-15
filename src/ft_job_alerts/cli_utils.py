@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Any, Iterable
 import math
 import re
+import datetime as dt
+import os
 
 from .filters import is_relevant
 from .normalizer import normalize_offer
@@ -108,3 +110,51 @@ def dedup_and_prepare_offers(
             n["raw_json"] = None
         prepared_map[oid] = n
     return list(prepared_map.values())
+
+
+def _slug(text: str, max_len: int = 40) -> str:
+    s = re.sub(r"[^A-Za-z0-9]+", "-", text.strip().lower()).strip("-")
+    if len(s) > max_len:
+        s = s[:max_len].rstrip("-")
+    return s or "x"
+
+
+def suggest_export_filename(
+    fmt: str,
+    *,
+    keywords: list[str] | None = None,
+    dept: str | None = None,
+    commune: str | None = None,
+    distance_km: int | None = None,
+    days: int | None = None,
+    topn: int | None = None,
+    label: str | None = None,
+) -> str:
+    os.makedirs("data/out", exist_ok=True)
+    parts: list[str] = ["offres"]
+    if label:
+        parts.append(_slug(label))
+    if keywords:
+        kk = [k for k in keywords if k]
+        if kk:
+            head = "+".join(_slug(k, 12) for k in kk[:3])
+            if len(kk) > 3:
+                head += f"+k{len(kk)}"
+            parts.append(head)
+    if dept:
+        parts.append(f"dept{dept}")
+    elif commune:
+        if distance_km is not None:
+            parts.append(f"c{commune}-{int(distance_km)}km")
+        else:
+            parts.append(f"c{commune}")
+    else:
+        parts.append("fr")
+    if days is not None:
+        parts.append(f"d{int(days)}")
+    if topn is not None:
+        parts.append(f"top{int(topn)}")
+    ts = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    parts.append(ts)
+    name = "_".join(parts) + f".{fmt}"
+    return os.path.join("data", "out", name)

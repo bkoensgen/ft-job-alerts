@@ -338,14 +338,30 @@ class App(ttk.Frame):
                 order_by="score_desc",
             )
             fmt = params["fmt"]
+            # Suggest descriptive filename
+            try:
+                from .cli_utils import suggest_export_filename as _sug
+                out_suggest = _sug(
+                    fmt,
+                    keywords=params.get("keywords"),
+                    dept=params.get("dept"),
+                    commune=params.get("commune"),
+                    distance_km=params.get("distance_km"),
+                    days=params.get("days"),
+                    topn=params.get("topn"),
+                )
+            except Exception:
+                out_suggest = None
             if fmt == "txt":
-                out_path = export_txt(rows, None, desc_chars=params["desc_chars"]) 
+                out_path = export_txt(rows, out_suggest, desc_chars=params["desc_chars"]) 
             elif fmt == "md":
-                out_path = export_md(rows, None, desc_chars=params["desc_chars"]) 
+                out_path = export_md(rows, out_suggest, desc_chars=params["desc_chars"]) 
             elif fmt == "csv":
-                out_path = export_csv(rows, None)
+                out_path = export_csv(rows, out_suggest)
+            elif fmt == "html":
+                out_path = export_html(rows, out_suggest, desc_chars=params["desc_chars"]) 
             else:
-                out_path = export_jsonl(rows, None)
+                out_path = export_jsonl(rows, out_suggest)
 
             self._log(f"Export terminé: {out_path}")
             guide = _ai_prompt_text(out_path)

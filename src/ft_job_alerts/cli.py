@@ -70,9 +70,9 @@ def cmd_fetch(args):
     if args.published_since_days is not None and pdays != args.published_since_days:
         print(f"[warn] publieeDepuis={args.published_since_days} non supporté; utilisation de {pdays} (valeurs permises: 1,3,7,14,31)")
 
-    def do_page(page: int) -> list[dict[str, Any]]:
+    def do_page(page: int, kws: list[str]) -> list[dict[str, Any]]:
         return client.search(
-            keywords=keywords,
+            keywords=kws,
             departements=departements,
             commune=commune,
             distance_km=distance_km,
@@ -86,19 +86,44 @@ def cmd_fetch(args):
             origine_offre=args.origine_offre,
         )
 
-    raw_all: list[dict[str, Any]] = []
+    # Build raw results with proper OR behavior: run separate queries per keyword and merge
+    kw_mode = getattr(args, "keywords_mode", "or").lower()
+    raw: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    def _extract_id(o: dict[str, Any]) -> str:
+        for k in ("id","offerId","idOffre","reference"):
+            v = o.get(k)
+            if v:
+                return str(v)
+        return ""
+    if kw_mode == "or" and len(keywords) > 1:
+        kw_groups = [[k] for k in keywords]
+    else:
+        kw_groups = [keywords]
+
     if args.fetch_all:
         max_pages = args.max_pages
-        for p in range(0, max_pages):
-            batch = do_page(p)
-            if not batch:
-                break
-            raw_all.extend(batch)
-            if len(batch) < args.limit:
-                break
-        raw = raw_all
+        for group in kw_groups:
+            for p in range(0, max_pages):
+                batch = do_page(p, group)
+                if not batch:
+                    break
+                for o in batch:
+                    oid = _extract_id(o)
+                    if oid and oid in seen_ids:
+                        continue
+                    seen_ids.add(oid)
+                    raw.append(o)
+                if len(batch) < args.limit:
+                    break
     else:
-        raw = do_page(args.page)
+        batch = do_page(args.page, kw_groups[0])
+        for o in batch:
+            oid = _extract_id(o)
+            if oid and oid in seen_ids:
+                continue
+            seen_ids.add(oid)
+            raw.append(o)
 
     # Filter + score
     base_lat = 47.76
@@ -115,8 +140,7 @@ def cmd_fetch(args):
     # Apply strict client-side radius only in simulate mode (server already filters in real API)
     use_client_radius = bool(cfg.api_simulate and center_lat is not None and center_lon is not None and distance_km is not None)
     # AND/OR matching mode for keywords (client-side)
-    kw_mode = getattr(args, "keywords_mode", "or").lower()
-    require_all = keywords if kw_mode == "and" else None
+    require_all = keywords if kw_mode == "and" and len(keywords) > 0 else None
 
     prepared = dedup_and_prepare_offers(
         raw,
@@ -175,16 +199,33 @@ def cmd_export(args):
             d.update(compute_labels(d))
             enriched.append(d)
         rows = enriched  # type: ignore
+    # Suggest descriptive name if none provided
+    out = args.outfile
+    if not out:
+        try:
+            from .cli_utils import suggest_export_filename as _sug
+            out = _sug(
+                args.format,
+                keywords=getattr(args, "keywords", None),
+                dept=getattr(args, "dept", None),
+                commune=getattr(args, "commune", None),
+                distance_km=getattr(args, "distance_km", None),
+                days=args.days,
+                topn=args.limit,
+                label=getattr(args, "name_hint", None),
+            )
+        except Exception:
+            out = None
     if args.format == "txt":
-        path = export_txt(rows, args.outfile, desc_chars=args.desc_chars)
+        path = export_txt(rows, out, desc_chars=args.desc_chars)
     elif args.format == "md":
-        path = export_md(rows, args.outfile, desc_chars=args.desc_chars)
+        path = export_md(rows, out, desc_chars=args.desc_chars)
     elif args.format == "html":
-        path = export_html(rows, args.outfile, desc_chars=args.desc_chars)
+        path = export_html(rows, out, desc_chars=args.desc_chars)
     elif args.format == "csv":
-        path = export_csv(rows, args.outfile)
+        path = export_csv(rows, out)
     else:
-        path = export_jsonl(rows, args.outfile)
+        path = export_jsonl(rows, out)
     print(f"Exported {len(rows)} rows to {path}")
 
 
@@ -1075,6 +1116,7 @@ def build_parser() -> argparse.ArgumentParser:
                          help="Filter by minimum monthly salary in EUR (derived heuristically from text)")
     s_export.add_argument("--top", dest="limit", type=int, default=100)
     s_export.add_argument("--outfile", default=None, help="Output path; defaults to data/out/…")
+    s_export.add_argument("--name-hint", dest="name_hint", default=None, help="Hint to include in auto filename if --outfile not provided")
     s_export.add_argument("--desc-chars", dest="desc_chars", type=int, default=400,
                          help="Include description truncated to N chars (0 to omit)")
     s_export.set_defaults(func=cmd_export)
