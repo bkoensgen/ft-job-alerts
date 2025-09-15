@@ -9,8 +9,11 @@ All matches are case-insensitive and accent-insensitive.
 
 import json
 import os
+import urllib.parse
+import urllib.request
 import unicodedata
 from typing import Dict, Tuple
+from .config import load_config
 
 
 def _strip_accents(s: str) -> str:
@@ -97,6 +100,40 @@ def _load_alias_file() -> Dict[str, str]:
         return {}
 
 
+def _online_lookup(name: str) -> str | None:
+    """Try geo.api.gouv.fr to resolve name → INSEE code.
+
+    Uses `GEO_COMMUNES_URL` (default: https://geo.api.gouv.fr/communes) with
+    parameters: `nom`, `fields=code,nom,centre`, `boost=population`, `limit=1`.
+    Returns INSEE code or None on failure.
+    """
+    cfg = load_config()
+    if not cfg.geocode_online:
+        return None
+    base = cfg.geocode_communes_url.rstrip("/")
+    params = {
+        "nom": name,
+        "fields": "code,nom,centre",
+        "boost": "population",
+        "limit": "1",
+    }
+    url = f"{base}?{urllib.parse.urlencode(params)}"
+    req = urllib.request.Request(url)
+    if cfg.accept_language:
+        req.add_header("Accept-Language", cfg.accept_language)
+    try:
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            raw = resp.read().decode("utf-8")
+            arr = json.loads(raw)
+            if isinstance(arr, list) and arr:
+                code = arr[0].get("code")
+                if code and isinstance(code, str):
+                    return code.strip().upper()
+    except Exception:
+        return None
+    return None
+
+
 def to_insee(commune: str | None) -> Tuple[str | None, str | None]:
     """Return (insee_code, matched_name) or (None, None).
 
@@ -111,12 +148,17 @@ def to_insee(commune: str | None) -> Tuple[str | None, str | None]:
         return s.upper(), None
 
     key = _norm(s)
+    # 1) Local alias file
     alias = _load_alias_file()
     code = alias.get(key)
     if code:
         return code, s
+    # 2) Built-in minimal fallback
     code = _builtin_aliases().get(key)
     if code:
         return code, s
+    # 3) Online lookup (if enabled)
+    code = _online_lookup(s)
+    if code:
+        return code, s
     return None, None
-

@@ -56,6 +56,7 @@ Most useful commands
 - Radius around Mulhouse (INSEE 68224), 50 km, last 14 days:
   - `python run.py fetch --keywords "robotique" --commune 68224 --distance-km 50 --published-since-days 14 --limit 100 --all --max-pages 10`
   - Vous pouvez aussi saisir un nom de ville courant, il sera converti en code INSEE localement (ex: `--commune Mulhouse` → `68224`).
+  - Si connecté à Internet, la conversion utilise l’API publique `geo.api.gouv.fr/communes` (configurable via `.env`). Sinon, un alias local est utilisé.
 - Departments 68 and 67, last 31 days:
   - `python run.py fetch --keywords "robotique" --dept 68,67 --published-since-days 31 --limit 100 --all --max-pages 10`
 - Enrich with full descriptions + apply URL (detail endpoint):

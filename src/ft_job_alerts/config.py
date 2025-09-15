@@ -56,6 +56,9 @@ class Config:
     default_keywords: list[str]
     default_dept: str | None
     default_radius_km: int
+    # Geocoding (commune name → INSEE)
+    geocode_online: bool
+    geocode_communes_url: str
 
 
 def load_config() -> Config:
@@ -93,4 +96,6 @@ def load_config() -> Config:
         default_keywords=[k.strip() for k in os.getenv("DEFAULT_KEYWORDS", "ros2,c++,vision").split(",") if k.strip()],
         default_dept=os.getenv("DEFAULT_DEPT", "68"),
         default_radius_km=int(os.getenv("DEFAULT_RADIUS_KM", "50")),
+        geocode_online=_get_bool("GEO_LOOKUP_ONLINE", True),
+        geocode_communes_url=os.getenv("GEO_COMMUNES_URL", "https://geo.api.gouv.fr/communes"),
     )
