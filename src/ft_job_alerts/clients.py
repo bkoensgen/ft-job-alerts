@@ -61,7 +61,8 @@ class OffresEmploiClient:
         origine_offre: int | None = None,
     ) -> list[dict[str, Any]]:
         if self.cfg.api_simulate:
-            return self._load_sample()
+            raw = self._load_sample()
+            return self._simulate_filter(raw, departements, commune, distance_km)
 
         params: dict[str, Any] = {}
         if keywords:
@@ -124,6 +125,56 @@ class OffresEmploiClient:
             return []
         with open(sample_path, "r", encoding="utf-8") as f:
             return json.load(f)
+
+    def _simulate_filter(
+        self,
+        raw: list[dict[str, Any]],
+        departements: list[str] | None,
+        commune: str | None,
+        distance_km: int | None,
+    ) -> list[dict[str, Any]]:
+        # Apply a basic post-filter in simulate mode to make UX realistic
+        # 1) Department filter
+        res = raw
+        if departements:
+            deps = {d.strip() for d in departements if d.strip()}
+            def _dep_of(o):
+                try:
+                    return str(o.get("lieuTravail", {}).get("departement") or "").strip()
+                except Exception:
+                    return ""
+            res = [o for o in res if _dep_of(o) in deps]
+
+        # 2) Radius filter around a known commune centroid
+        if commune and distance_km is not None:
+            centers = {
+                "68224": (47.7500, 7.3400),  # Mulhouse
+                "68066": (48.0790, 7.3585),  # Colmar
+                "67482": (48.5734, 7.7521),  # Strasbourg
+                "75056": (48.8566, 2.3522),  # Paris
+                "69123": (45.7640, 4.8357),  # Lyon
+            }
+            lat0, lon0 = centers.get(str(commune).upper(), (47.7600, 7.3400))
+            import math
+            def haversine(lat1, lon1, lat2, lon2):
+                R = 6371.0
+                dlat = math.radians(lat2 - lat1)
+                dlon = math.radians(lon2 - lon1)
+                a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
+                c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+                return R * c
+            def _coords(o):
+                lt = None
+                ln = None
+                try:
+                    lt = float(o.get("lieuTravail", {}).get("latitude"))
+                    ln = float(o.get("lieuTravail", {}).get("longitude"))
+                except Exception:
+                    pass
+                return lt, ln
+            rad = max(0, int(distance_km))
+            res = [o for o in res if (lambda c: c[0] is not None and haversine(lat0, lon0, c[0], c[1]) <= rad)(_coords(o))]
+        return res
 
     def detail(self, offer_id: str) -> dict[str, Any]:
         if self.cfg.api_simulate:

@@ -76,8 +76,6 @@ class App(ttk.Frame):
         self.var_domain = tk.StringVar(value=_dom_default)
         self.opt_domain = ttk.OptionMenu(frm_cat, self.var_domain, _dom_default, *[d[0] for d in _DOMAINS], command=lambda *_: self._apply_domain_defaults())
         self.opt_domain.grid(row=0, column=1, sticky="w", padx=6)
-        self.var_smart = tk.BooleanVar(value=True)
-        ttk.Checkbutton(frm_cat, text="Filtre intelligent (robotique)", variable=self.var_smart).grid(row=0, column=2, sticky="w", padx=8)
         self.var_cats: list[tk.BooleanVar] = []
         for i, (label, _kw) in enumerate(_CATEGORIES):
             var = tk.BooleanVar(value=False)
@@ -88,9 +86,11 @@ class App(ttk.Frame):
         # Keywords extra
         frm_kw = ttk.Frame(self)
         frm_kw.pack(fill=tk.X, padx=10, pady=4)
-        ttk.Label(frm_kw, text="Mots-clés supplémentaires (séparés par des virgules):").pack(anchor="w")
+        ttk.Label(frm_kw, text="Mots-clés (séparés par des virgules):").pack(anchor="w")
         self.ent_kw = ttk.Entry(frm_kw)
         self.ent_kw.pack(fill=tk.X)
+        self.lbl_kw_hint = ttk.Label(frm_kw, text="", foreground="#777")
+        self.lbl_kw_hint.pack(anchor="w", pady=2)
 
         # Location
         frm_loc = ttk.LabelFrame(self, text="Localisation (optionnel)")
@@ -154,32 +154,23 @@ class App(ttk.Frame):
 
     def _apply_domain_defaults(self):
         label = self.var_domain.get() if hasattr(self, 'var_domain') else (_DOMAINS[1][0] if len(_DOMAINS) > 1 else _DOMAINS[0][0])
-        # Reset categories
+        # Reset categories (aucune pré-sélection)
         if hasattr(self, 'var_cats'):
             for v in self.var_cats:
                 v.set(False)
-        # Apply defaults from profile when available
-        prof = self.profile if isinstance(self.profile, dict) else {}
-        sel_cats = {s for s in prof.get("selected_categories", []) if isinstance(s, str)}
-        # For robotics, enable smart filter by default
-        self.var_smart.set(label.startswith("Robotique"))
-        # Prefill domain keywords or profile extra
+        # No auto-fill of keywords; only show a hint based on domain
+        hint = ""
         for name, kws in _DOMAINS:
-            if name == label and hasattr(self, 'ent_kw'):
-                default_kws = prof.get("extra_keywords") if sel_cats else kws
-                try:
-                    seq = [k.strip() for k in default_kws] if isinstance(default_kws, list) else list(default_kws)
-                except Exception:
-                    seq = kws
-                self.ent_kw.delete(0, tk.END)
-                self.ent_kw.insert(0, ", ".join(seq))
+            if name == label:
+                hint = "Exemples: " + ", ".join(kws[:6]) if kws else ""
                 break
-        # Pre-select categories if profile lists them
-        if sel_cats and hasattr(self, 'var_cats'):
-            for var, (cat_label, _kw) in zip(self.var_cats, _CATEGORIES):
-                if cat_label in sel_cats:
-                    var.set(True)
+        if hasattr(self, 'lbl_kw_hint'):
+            self.lbl_kw_hint.config(text=hint)
+        if hasattr(self, 'ent_kw'):
+            self.ent_kw.delete(0, tk.END)
         # Apply other numeric defaults if provided
+        # Apply location/time defaults only (no categories/keywords auto-fill)
+        prof = self.profile if isinstance(self.profile, dict) else {}
         try:
             if prof.get("published_since_days") and hasattr(self, 'ent_days'):
                 self.ent_days.delete(0, tk.END)
@@ -264,7 +255,6 @@ class App(ttk.Frame):
             fmt=fmt,
             desc_chars=desc_chars,
             min_salary=min_salary,
-            smart_filter=self.var_smart.get() if hasattr(self, 'var_smart') else True,
         )
 
     def _on_run(self):
@@ -311,7 +301,7 @@ class App(ttk.Frame):
                 origine_offre=None,
                 fetch_all=True,
                 max_pages=10,
-                no_smart_filter=not bool(params.get("smart_filter", True)),
+                no_smart_filter=True,
             )
             cmd_fetch(fargs)
 
