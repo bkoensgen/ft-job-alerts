@@ -236,11 +236,11 @@ def cmd_export(args):
         except Exception:
             out = None
     if args.format == "txt":
-        path = export_txt(rows, out, desc_chars=args.desc_chars)
+        path = export_txt(rows, out, desc_chars=args.desc_chars, labels_mode=getattr(args, "labels_mode", "auto"))
     elif args.format == "md":
-        path = export_md(rows, out, desc_chars=args.desc_chars)
+        path = export_md(rows, out, desc_chars=args.desc_chars, labels_mode=getattr(args, "labels_mode", "auto"))
     elif args.format == "html":
-        path = export_html(rows, out, desc_chars=args.desc_chars)
+        path = export_html(rows, out, desc_chars=args.desc_chars, labels_mode=getattr(args, "labels_mode", "auto"))
     elif args.format == "csv":
         path = export_csv(rows, out)
     else:
@@ -1138,6 +1138,8 @@ def build_parser() -> argparse.ArgumentParser:
     s_export.add_argument("--name-hint", dest="name_hint", default=None, help="Hint to include in auto filename if --outfile not provided")
     s_export.add_argument("--desc-chars", dest="desc_chars", type=int, default=400,
                          help="Include description truncated to N chars (0 to omit)")
+    s_export.add_argument("--labels-mode", choices=["auto","generic","robotics"], default="auto",
+                         help="Which label families to include in txt/md/html exports")
     s_export.set_defaults(func=cmd_export)
 
     s_enrich = sub.add_parser("enrich", help="Fetch offer details to fill full description/apply URL/salary")

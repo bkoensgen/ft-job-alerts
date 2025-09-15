@@ -373,14 +373,17 @@ class App(ttk.Frame):
                 )
             except Exception:
                 out_suggest = None
+            # Pick label mode based on domain
+            dom_label = self.var_domain.get() if hasattr(self, 'var_domain') else ''
+            labels_mode = 'robotics' if dom_label.lower().startswith('robotique') else 'generic'
             if fmt == "txt":
-                out_path = export_txt(rows, out_suggest, desc_chars=params["desc_chars"]) 
+                out_path = export_txt(rows, out_suggest, desc_chars=params["desc_chars"], labels_mode=labels_mode) 
             elif fmt == "md":
-                out_path = export_md(rows, out_suggest, desc_chars=params["desc_chars"]) 
+                out_path = export_md(rows, out_suggest, desc_chars=params["desc_chars"], labels_mode=labels_mode) 
             elif fmt == "csv":
                 out_path = export_csv(rows, out_suggest)
             elif fmt == "html":
-                out_path = export_html(rows, out_suggest, desc_chars=params["desc_chars"]) 
+                out_path = export_html(rows, out_suggest, desc_chars=params["desc_chars"], labels_mode=labels_mode) 
             else:
                 out_path = export_jsonl(rows, out_suggest)
 

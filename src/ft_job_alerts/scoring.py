@@ -27,48 +27,38 @@ def score_offer(
 ) -> float:
     """Compute a simple score with optional weights.
 
-    weights keys (defaults):
-      - w_keywords (1.0)
-      - w_contract (1.0)
-      - w_distance (1.0)
-      - w_salary (1.0)
+    weights keys (defaults): w_keywords, w_contract, w_distance, w_salary
     """
-    w = {
+    wt = {
         "w_keywords": 1.0,
         "w_contract": 1.0,
         "w_distance": 1.0,
         "w_salary": 1.0,
     }
     if isinstance(weights, dict):
-        w.update({k: float(v) for k, v in weights.items() if k in w})
+        wt.update({k: float(v) for k, v in weights.items() if k in wt})
+
     text = " ".join(
         [
-            str(offer.get("intitule", "")),
+            str(offer.get("intitule") or offer.get("title") or ""),
             str(offer.get("description", "")),
         ]
     )
     s = 0.0
-    for pattern, w in KEYWORD_WEIGHTS:
-        if re.search(pattern, text, flags=re.IGNORECASE):
-            s += w * w_weights  # type: ignore[name-defined]
-    # local alias for readability (post-assign)
-    w_keywords = w["w_keywords"]
-    # Replace previous use now that we created local
-    s = 0.0
     for pattern, weight in KEYWORD_WEIGHTS:
         if re.search(pattern, text, flags=re.IGNORECASE):
-            s += weight * w_keywords
+            s += weight * wt["w_keywords"]
 
     # Contract preference: CDI ≥ CDD ≥ Alternance ≥ Stage
     contrat = str(offer.get("typeContrat", "")).upper()
     if "CDI" in contrat:
-        s += 1.5 * w["w_contract"]
+        s += 1.5 * wt["w_contract"]
     elif "CDD" in contrat:
-        s += 0.8 * w["w_contract"]
+        s += 0.8 * wt["w_contract"]
     elif "ALTERN" in contrat:
-        s += 0.4 * w["w_contract"]
+        s += 0.4 * wt["w_contract"]
     elif "STAGE" in contrat:
-        s += 0.3 * w["w_contract"]
+        s += 0.3 * wt["w_contract"]
 
     # Distance bonus if coordinates present and base provided
     if base_lat is not None and base_lon is not None:
@@ -83,14 +73,14 @@ def score_offer(
         if lat is not None and lon is not None:
             d = haversine_km(float(base_lat), float(base_lon), float(lat), float(lon))
             if d <= 20:
-                s += 1.5 * w["w_distance"]
+                s += 1.5 * wt["w_distance"]
             elif d <= 50:
-                s += 0.8 * w["w_distance"]
+                s += 0.8 * wt["w_distance"]
             elif d <= 100:
-                s += 0.3 * w["w_distance"]
+                s += 0.3 * wt["w_distance"]
 
     # Salary bonus (rough, uses min monthly salary if parsable)
-    if w["w_salary"] > 0:
+    if wt["w_salary"] > 0:
         txt = str(offer.get("salary") or "") + "\n" + str(offer.get("description") or "")
         try:
             v = _parse_salary(txt) if _parse_salary else None
@@ -98,11 +88,11 @@ def score_offer(
             v = None
         if v is not None:
             if v >= 3500:
-                s += 1.0 * w["w_salary"]
+                s += 1.0 * wt["w_salary"]
             elif v >= 3000:
-                s += 0.6 * w["w_salary"]
+                s += 0.6 * wt["w_salary"]
             elif v >= 2500:
-                s += 0.3 * w["w_salary"]
+                s += 0.3 * wt["w_salary"]
     return round(s, 3)
 
 

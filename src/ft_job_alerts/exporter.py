@@ -19,7 +19,7 @@ def _row_to_dict(row) -> dict:
     return {k: row[k] for k in row.keys()}
 
 
-def export_txt(rows, outfile: str | None = None, desc_chars: int | None = 400) -> str:
+def export_txt(rows, outfile: str | None = None, desc_chars: int | None = 400, labels_mode: str = "auto") -> str:
     outdir = _ensure_out_dir()
     if not outfile:
         ts = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -27,7 +27,7 @@ def export_txt(rows, outfile: str | None = None, desc_chars: int | None = 400) -
     with open(outfile, "w", encoding="utf-8") as f:
         for r0 in rows:
             r = _row_to_dict(r0)
-            labels = {k: r.get(k) for k in ("CORE_ROBOTICS","ADJACENT_CATEGORIES","REMOTE","SENIORITY","PLC_TAGS","LANG_TAGS","SENSOR_TAGS","AGENCY")}
+            labels = {k: r.get(k) for k in ("CORE_ROBOTICS","ADJACENT_CATEGORIES","REMOTE","SENIORITY","PLC_TAGS","LANG_TAGS","SENSOR_TAGS","AGENCY","ROS_STACK","ROBOT_BRANDS","VISION_LIBS")}
             if labels.get("CORE_ROBOTICS") is None:
                 labels = compute_labels(r)
             desc = r.get("description") or ""
@@ -44,9 +44,9 @@ def export_txt(rows, outfile: str | None = None, desc_chars: int | None = 400) -
             )
             f.write(f"  URL: {link} | APPLY_URL: {r.get('apply_url','')}\n")
             shortage = r.get("offres_manque_candidats")
+            # Generic header labels
             f.write(
                 "  LABELS: "
-                f"CORE_ROBOTICS={ 'yes' if labels.get('CORE_ROBOTICS') else 'no' }; "
                 f"SENIORITY={labels.get('SENIORITY')}; "
                 f"REMOTE={ 'yes' if labels.get('REMOTE') else 'no' }; "
                 f"AGENCY={ 'yes' if labels.get('AGENCY') else 'no' }; "
@@ -57,13 +57,18 @@ def export_txt(rows, outfile: str | None = None, desc_chars: int | None = 400) -
                 if not arr:
                     return f"  {name}: []\n"
                 return f"  {name}: [" + ", ".join(arr) + "]\n"
-            f.write(_fmt_list("TAGS_TECH", labels.get("PLC_TAGS")))
-            f.write(_fmt_list("TAGS_ADJACENT", labels.get("ADJACENT_CATEGORIES")))
+            # Generic mode prints only high-signal items; robotics prints full set
+            lm = (labels_mode or "auto").lower()
+            is_robot = lm == "robotics" or (lm == "auto" and (labels.get("CORE_ROBOTICS") or labels.get("ROS_STACK")))
+            # Always helpful
             f.write(_fmt_list("LANGS", labels.get("LANG_TAGS")))
-            f.write(_fmt_list("SENSORS", labels.get("SENSOR_TAGS")))
-            f.write(_fmt_list("ROS_STACK", labels.get("ROS_STACK")))
-            f.write(_fmt_list("ROBOT_BRANDS", labels.get("ROBOT_BRANDS")))
-            f.write(_fmt_list("VISION_LIBS", labels.get("VISION_LIBS")))
+            if is_robot:
+                f.write(_fmt_list("TAGS_TECH", labels.get("PLC_TAGS")))
+                f.write(_fmt_list("TAGS_ADJACENT", labels.get("ADJACENT_CATEGORIES")))
+                f.write(_fmt_list("SENSORS", labels.get("SENSOR_TAGS")))
+                f.write(_fmt_list("ROS_STACK", labels.get("ROS_STACK")))
+                f.write(_fmt_list("ROBOT_BRANDS", labels.get("ROBOT_BRANDS")))
+                f.write(_fmt_list("VISION_LIBS", labels.get("VISION_LIBS")))
             f.write(f"  SALARY_TEXT: {r.get('salary','')}\n")
             if desc:
                 f.write("  DESCRIPTION:\n")
@@ -73,7 +78,7 @@ def export_txt(rows, outfile: str | None = None, desc_chars: int | None = 400) -
     return outfile
 
 
-def export_md(rows, outfile: str | None = None, desc_chars: int | None = 500) -> str:
+def export_md(rows, outfile: str | None = None, desc_chars: int | None = 500, labels_mode: str = "auto") -> str:
     outdir = _ensure_out_dir()
     if not outfile:
         ts = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -82,7 +87,7 @@ def export_md(rows, outfile: str | None = None, desc_chars: int | None = 500) ->
         f.write("# Offres (sélection)\n\n")
         for r0 in rows:
             r = _row_to_dict(r0)
-            labels = {k: r.get(k) for k in ("CORE_ROBOTICS","ADJACENT_CATEGORIES","REMOTE","SENIORITY","PLC_TAGS","LANG_TAGS","SENSOR_TAGS","AGENCY")}
+            labels = {k: r.get(k) for k in ("CORE_ROBOTICS","ADJACENT_CATEGORIES","REMOTE","SENIORITY","PLC_TAGS","LANG_TAGS","SENSOR_TAGS","AGENCY","ROS_STACK","ROBOT_BRANDS","VISION_LIBS")}
             if labels.get("CORE_ROBOTICS") is None:
                 labels = compute_labels(r)
             loc_detail = f"{r.get('city','')} ({r.get('department','')})" if r.get("city") else r.get("location", "")
@@ -96,20 +101,23 @@ def export_md(rows, outfile: str | None = None, desc_chars: int | None = 500) ->
             f.write(f"- URL: {link}\n")
             f.write(f"- Apply: {r.get('apply_url','')}\n")
             shortage = r.get("offres_manque_candidats")
-            f.write(f"- Labels: CORE={ 'yes' if labels.get('CORE_ROBOTICS') else 'no' }; SENIORITY={labels.get('SENIORITY')}; REMOTE={ 'yes' if labels.get('REMOTE') else 'no' }; AGENCY={ 'yes' if labels.get('AGENCY') else 'no' }; SHORTAGE={ 'yes' if shortage else 'no' }\n")
+            f.write(f"- Labels: SENIORITY={labels.get('SENIORITY')}; REMOTE={ 'yes' if labels.get('REMOTE') else 'no' }; AGENCY={ 'yes' if labels.get('AGENCY') else 'no' }; SHORTAGE={ 'yes' if shortage else 'no' }\n")
             def _md_list(name, arr):
                 arr = arr or []
                 if not arr:
                     f.write(f"- {name}: []\n")
                 else:
                     f.write(f"- {name}: [" + ", ".join(arr) + "]\n")
-            _md_list("Tags tech", labels.get("PLC_TAGS"))
-            _md_list("Adjacents", labels.get("ADJACENT_CATEGORIES"))
+            lm = (labels_mode or "auto").lower()
+            is_robot = lm == "robotics" or (lm == "auto" and (labels.get("CORE_ROBOTICS") or labels.get("ROS_STACK")))
             _md_list("Langages", labels.get("LANG_TAGS"))
-            _md_list("Capteurs", labels.get("SENSOR_TAGS"))
-            _md_list("ROS stack", labels.get("ROS_STACK"))
-            _md_list("Marques robots", labels.get("ROBOT_BRANDS"))
-            _md_list("Vision libs", labels.get("VISION_LIBS"))
+            if is_robot:
+                _md_list("Tags tech", labels.get("PLC_TAGS"))
+                _md_list("Adjacents", labels.get("ADJACENT_CATEGORIES"))
+                _md_list("Capteurs", labels.get("SENSOR_TAGS"))
+                _md_list("ROS stack", labels.get("ROS_STACK"))
+                _md_list("Marques robots", labels.get("ROBOT_BRANDS"))
+                _md_list("Vision libs", labels.get("VISION_LIBS"))
             f.write(f"- Salaire: {r.get('salary','')}\n")
             desc = r.get("description") or ""
             if desc_chars == 0:
@@ -172,7 +180,7 @@ def export_jsonl(rows, outfile: str | None = None) -> str:
     return outfile
 
 
-def export_html(rows, outfile: str | None = None, desc_chars: int | None = 600) -> str:
+def export_html(rows, outfile: str | None = None, desc_chars: int | None = 600, labels_mode: str = "auto") -> str:
     outdir = _ensure_out_dir()
     if not outfile:
         ts = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -204,7 +212,6 @@ def export_html(rows, outfile: str | None = None, desc_chars: int | None = 600) 
                 f.write(f"<div class=\"link\"><a href=\"{esc(link)}\" target=\"_blank\">Voir l’offre / Postuler</a></div>")
             shortage = r.get("offres_manque_candidats")
             chips = []
-            if labels.get("CORE_ROBOTICS"): chips.append("Core: robotics/ROS")
             if labels.get("REMOTE"): chips.append("Remote/Hybrid")
             if labels.get("AGENCY"): chips.append("Agence/ESN")
             ssen = labels.get("SENIORITY")
@@ -213,10 +220,18 @@ def export_html(rows, outfile: str | None = None, desc_chars: int | None = 600) 
             f.write("<div class=\"tags\">")
             for c in chips:
                 f.write(f"<span class=\"tag\">{esc(str(c))}</span>")
-            for name in ("PLC_TAGS","LANG_TAGS","SENSOR_TAGS","ROS_STACK","ROBOT_BRANDS","VISION_LIBS"):
+            # Generic first
+            for name in ("LANG_TAGS",):
                 arr = labels.get(name) or []
                 for t in arr:
                     f.write(f"<span class=\"tag\">{esc(str(t))}</span>")
+            lm = (labels_mode or "auto").lower()
+            is_robot = lm == "robotics" or (lm == "auto" and (labels.get("CORE_ROBOTICS") or labels.get("ROS_STACK")))
+            if is_robot:
+                for name in ("PLC_TAGS","SENSOR_TAGS","ROS_STACK","ROBOT_BRANDS","VISION_LIBS","ADJACENT_CATEGORIES"):
+                    arr = labels.get(name) or []
+                    for t in arr:
+                        f.write(f"<span class=\"tag\">{esc(str(t))}</span>")
             f.write("</div>")
             desc = r.get("description") or ""
             if desc_chars == 0:
