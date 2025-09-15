@@ -107,7 +107,7 @@ class App(ttk.Frame):
         self.ent_dept = ttk.Entry(frm_loc)
         self.ent_dept.insert(0, str(self.cfg.default_dept or ""))
         self.ent_dept.grid(row=1, column=1, sticky="we", padx=4)
-        ttk.Label(frm_loc, text="Commune (INSEE):").grid(row=2, column=0, sticky="e", padx=4)
+        ttk.Label(frm_loc, text="Commune (nom ou INSEE):").grid(row=2, column=0, sticky="e", padx=4)
         self.ent_commune = ttk.Entry(frm_loc)
         self.ent_commune.grid(row=2, column=1, sticky="we", padx=4)
         ttk.Label(frm_loc, text="Distance (km):").grid(row=2, column=2, sticky="e", padx=4)
@@ -267,17 +267,20 @@ class App(ttk.Frame):
             self.btn_run.configure(state=tk.NORMAL)
             return
         params = self._gather_inputs()
-        # Validate INSEE when using commune mode
+        # Convert name → INSEE when using commune mode
         if self.loc_choice.get() == "commune" and params.get("commune"):
-            code = str(params.get("commune") or "").strip()
-            import re
-            if not (re.fullmatch(r"\d{5}", code) or re.fullmatch(r"(2A|2B)\d{3}", code, flags=re.I)):
+            from .geocode import to_insee
+            code, matched = to_insee(str(params.get("commune")))
+            if not code:
                 messagebox.showerror(
-                    "Code INSEE requis",
-                    "Le champ 'Commune (INSEE)' doit contenir un code INSEE (ex: Mulhouse 68224).",
+                    "Commune inconnue",
+                    "Saisissez un nom de ville connu ou un code INSEE (ex: Mulhouse ou 68224).",
                 )
                 self.btn_run.configure(state=tk.NORMAL)
                 return
+            if matched and matched.upper() != code:
+                self._log(f"Commune convertie: {matched} → {code}")
+            params["commune"] = code
         self._log("Récupération des offres (cela peut prendre un moment)…")
         threading.Thread(target=self._worker, args=(params,), daemon=True).start()
 

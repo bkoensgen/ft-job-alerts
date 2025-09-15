@@ -5,6 +5,7 @@ from typing import Any, Iterable
 from .filters import is_relevant
 from .normalizer import normalize_offer
 from .scoring import score_offer
+from .geocode import to_insee as _to_insee
 
 
 def sanitize_published_since(pdays: int | None) -> int | None:
@@ -16,20 +17,20 @@ def sanitize_published_since(pdays: int | None) -> int | None:
     return min(allowed, key=lambda x: abs(x - int(pdays)))
 
 
-def validate_commune_code(commune: str | None) -> str | None:
-    """Validate that a commune is a proper INSEE code (5 digits or 2A/2B + 3 digits).
+def commune_to_insee(commune: str | None) -> str | None:
+    """Accept city names or INSEE codes and return a valid INSEE code.
 
-    Returns the normalized code or None if input is None/empty.
-    Raises ValueError on invalid format with a helpful message.
+    - If `commune` looks like an INSEE code, return it uppercased.
+    - Otherwise try to resolve by name using a local alias map (accent-insensitive).
+    - Returns None if input is empty; raises ValueError if it cannot be resolved.
     """
     if not commune:
         return None
-    code = str(commune).strip()
-    import re
-    if re.fullmatch(r"\d{5}", code) or re.fullmatch(r"(2A|2B)\d{3}", code, flags=re.I):
-        return code.upper()
+    code, matched = _to_insee(commune)
+    if code:
+        return code
     raise ValueError(
-        "Code INSEE invalide pour --commune. Attendu: 5 chiffres (ex: Mulhouse 68224)."
+        "Commune inconnue. Saisissez un code INSEE (ex: 68224) ou un nom de ville connu (ex: Mulhouse)."
     )
 
 

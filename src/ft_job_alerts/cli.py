@@ -19,7 +19,7 @@ from .storage import update_offer_details
 from .charts import build_charts
 from .normalizer import normalize_offer
 from .profiles import get_categories as _get_cats, get_domains as _get_doms, get_default_profile as _get_prof
-from .cli_utils import dedup_and_prepare_offers, sanitize_published_since, validate_commune_code
+from .cli_utils import dedup_and_prepare_offers, sanitize_published_since, commune_to_insee
 from .profiles import get_profile_by_name, get_default_profile as _profiles_default, build_keywords_from_profile, list_profiles
 
 
@@ -56,7 +56,7 @@ def cmd_fetch(args):
     if args.dept:
         departements = [d.strip() for d in str(args.dept).split(",") if d.strip()]
     try:
-        commune = validate_commune_code(args.commune)
+        commune = commune_to_insee(args.commune)
     except ValueError as ve:
         raise SystemExit(str(ve))
     # `distance` only applies if `commune` is set. Keep radius_km for backward compat.
@@ -179,7 +179,7 @@ def cmd_sweep(args):
     if args.dept:
         departements = [d.strip() for d in str(args.dept).split(",") if d.strip()]
     try:
-        commune = validate_commune_code(args.commune)
+        commune = commune_to_insee(args.commune)
     except ValueError as ve:
         raise SystemExit(str(ve))
     distance_km = args.distance_km
