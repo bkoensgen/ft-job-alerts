@@ -12,7 +12,7 @@ import os
 import urllib.parse
 import urllib.request
 import unicodedata
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 from .config import load_config
 
 
@@ -162,3 +162,43 @@ def to_insee(commune: str | None) -> Tuple[str | None, str | None]:
     if code:
         return code, s
     return None, None
+
+
+def get_commune_center(commune: str | None) -> Tuple[Optional[float], Optional[float]]:
+    """Return approximate (lat, lon) for a commune code or name.
+
+    - Tries online geo.api.gouv.fr (if enabled)
+    - Falls back to a tiny builtin mapping for some codes
+    """
+    code, _ = to_insee(commune)
+    if not code:
+        return None, None
+    # Try online
+    cfg = load_config()
+    if cfg.geocode_online:
+        base = cfg.geocode_communes_url.rstrip("/")
+        params = {"code": code, "fields": "code,centre", "format": "json"}
+        url = f"{base}?{urllib.parse.urlencode(params)}"
+        try:
+            with urllib.request.urlopen(url, timeout=6) as resp:
+                raw = resp.read().decode("utf-8")
+                arr = json.loads(raw)
+                if isinstance(arr, list) and arr:
+                    centre = arr[0].get("centre")
+                    if isinstance(centre, dict) and centre.get("type") == "Point":
+                        coords = centre.get("coordinates")
+                        if isinstance(coords, list) and len(coords) == 2:
+                            lon, lat = float(coords[0]), float(coords[1])
+                            return lat, lon
+        except Exception:
+            pass
+    # Fallback to builtin map
+    centers = {
+        "68224": (47.7500, 7.3400),  # Mulhouse
+        "68066": (48.0790, 7.3585),  # Colmar
+        "67482": (48.5734, 7.7521),  # Strasbourg
+        "75056": (48.8566, 2.3522),  # Paris
+        "69123": (45.7640, 4.8357),  # Lyon
+        "13055": (43.2965, 5.3698),  # Marseille
+    }
+    return centers.get(code, (None, None))

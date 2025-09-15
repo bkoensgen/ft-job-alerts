@@ -21,6 +21,7 @@ from .normalizer import normalize_offer
 from .profiles import get_categories as _get_cats, get_domains as _get_doms, get_default_profile as _get_prof
 from .cli_utils import dedup_and_prepare_offers, sanitize_published_since, commune_to_insee
 from .profiles import get_profile_by_name, get_default_profile as _profiles_default, build_keywords_from_profile, list_profiles
+from .geocode import get_commune_center
 
 
 """CLI entry with subcommands. Most helpers are factored in normalizer/cli_utils modules."""
@@ -102,6 +103,13 @@ def cmd_fetch(args):
     # Filter + score
     base_lat = 47.76
     base_lon = 7.34
+    center_lat = None
+    center_lon = None
+    if commune and distance_km is not None:
+        clat, clon = get_commune_center(commune)
+        if clat is not None and clon is not None:
+            center_lat, center_lon = clat, clon
+            base_lat, base_lon = clat, clon
     prepared = dedup_and_prepare_offers(
         raw,
         rome_codes=rome_codes,
@@ -109,6 +117,9 @@ def cmd_fetch(args):
         base_lat=base_lat,
         base_lon=base_lon,
         apply_relevance=not bool(getattr(args, "no_smart_filter", False)),
+        center_lat=center_lat,
+        center_lon=center_lon,
+        max_distance_km=distance_km if (center_lat is not None and center_lon is not None) else None,
     )
 
     inserted = upsert_offers(prepared)
@@ -188,6 +199,11 @@ def cmd_sweep(args):
     pdays = sanitize_published_since(args.published_since_days)
 
     total_prepared = 0
+    center_lat = center_lon = None
+    if commune and distance_km is not None:
+        clat, clon = get_commune_center(commune)
+        if clat is not None and clon is not None:
+            center_lat, center_lon = clat, clon
     keywords_groups = [k.strip() for k in str(args.keywords_list).split(";") if k.strip()]
     base_lat, base_lon = 47.76, 7.34
     for kw in keywords_groups:
@@ -211,9 +227,12 @@ def cmd_sweep(args):
                 raw,
                 rome_codes=[],
                 keywords=[kw],
-                base_lat=base_lat,
-                base_lon=base_lon,
+                base_lat=center_lat or base_lat,
+                base_lon=center_lon or base_lon,
                 apply_relevance=False,
+                center_lat=center_lat,
+                center_lon=center_lon,
+                max_distance_km=distance_km if (center_lat is not None and center_lon is not None) else None,
             )
             total_prepared += len(prepared)
             upsert_offers(prepared)
