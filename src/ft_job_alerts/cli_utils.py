@@ -16,6 +16,23 @@ def sanitize_published_since(pdays: int | None) -> int | None:
     return min(allowed, key=lambda x: abs(x - int(pdays)))
 
 
+def validate_commune_code(commune: str | None) -> str | None:
+    """Validate that a commune is a proper INSEE code (5 digits or 2A/2B + 3 digits).
+
+    Returns the normalized code or None if input is None/empty.
+    Raises ValueError on invalid format with a helpful message.
+    """
+    if not commune:
+        return None
+    code = str(commune).strip()
+    import re
+    if re.fullmatch(r"\d{5}", code) or re.fullmatch(r"(2A|2B)\d{3}", code, flags=re.I):
+        return code.upper()
+    raise ValueError(
+        "Code INSEE invalide pour --commune. Attendu: 5 chiffres (ex: Mulhouse 68224)."
+    )
+
+
 def dedup_and_prepare_offers(
     raw: Iterable[dict[str, Any]],
     *,

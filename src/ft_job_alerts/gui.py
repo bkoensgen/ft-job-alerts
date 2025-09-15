@@ -277,6 +277,17 @@ class App(ttk.Frame):
             self.btn_run.configure(state=tk.NORMAL)
             return
         params = self._gather_inputs()
+        # Validate INSEE when using commune mode
+        if self.loc_choice.get() == "commune" and params.get("commune"):
+            code = str(params.get("commune") or "").strip()
+            import re
+            if not (re.fullmatch(r"\d{5}", code) or re.fullmatch(r"(2A|2B)\d{3}", code, flags=re.I)):
+                messagebox.showerror(
+                    "Code INSEE requis",
+                    "Le champ 'Commune (INSEE)' doit contenir un code INSEE (ex: Mulhouse 68224).",
+                )
+                self.btn_run.configure(state=tk.NORMAL)
+                return
         self._log("Récupération des offres (cela peut prendre un moment)…")
         threading.Thread(target=self._worker, args=(params,), daemon=True).start()
 
