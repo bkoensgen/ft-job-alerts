@@ -110,6 +110,8 @@ def cmd_fetch(args):
         if clat is not None and clon is not None:
             center_lat, center_lon = clat, clon
             base_lat, base_lon = clat, clon
+        else:
+            print("[warn] Centre géographique non résolu pour la commune — filtre rayon non appliqué côté client.")
     prepared = dedup_and_prepare_offers(
         raw,
         rome_codes=rome_codes,
@@ -204,6 +206,8 @@ def cmd_sweep(args):
         clat, clon = get_commune_center(commune)
         if clat is not None and clon is not None:
             center_lat, center_lon = clat, clon
+        else:
+            print("[warn] Centre géographique non résolu pour la commune — filtre rayon non appliqué côté client.")
     keywords_groups = [k.strip() for k in str(args.keywords_list).split(";") if k.strip()]
     base_lat, base_lon = 47.76, 7.34
     for kw in keywords_groups:

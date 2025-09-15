@@ -170,13 +170,14 @@ def get_commune_center(commune: str | None) -> Tuple[Optional[float], Optional[f
     - Tries online geo.api.gouv.fr (if enabled)
     - Falls back to a tiny builtin mapping for some codes
     """
-    code, _ = to_insee(commune)
+    code, matched = to_insee(commune)
     if not code:
         return None, None
     # Try online
     cfg = load_config()
     if cfg.geocode_online:
         base = cfg.geocode_communes_url.rstrip("/")
+        # Primary: lookup by INSEE code
         params = {"code": code, "fields": "code,centre", "format": "json"}
         url = f"{base}?{urllib.parse.urlencode(params)}"
         try:
@@ -192,6 +193,24 @@ def get_commune_center(commune: str | None) -> Tuple[Optional[float], Optional[f
                             return lat, lon
         except Exception:
             pass
+        # Fallback: lookup by name
+        name = matched or str(commune or "")
+        if name:
+            try:
+                params = {"nom": name, "fields": "centre", "limit": "1", "boost": "population", "format": "json"}
+                url = f"{base}?{urllib.parse.urlencode(params)}"
+                with urllib.request.urlopen(url, timeout=6) as resp:
+                    raw = resp.read().decode("utf-8")
+                    arr = json.loads(raw)
+                    if isinstance(arr, list) and arr:
+                        centre = arr[0].get("centre")
+                        if isinstance(centre, dict) and centre.get("type") == "Point":
+                            coords = centre.get("coordinates")
+                            if isinstance(coords, list) and len(coords) == 2:
+                                lon, lat = float(coords[0]), float(coords[1])
+                                return lat, lon
+            except Exception:
+                pass
     # Fallback to builtin map
     centers = {
         "68224": (47.7500, 7.3400),  # Mulhouse
