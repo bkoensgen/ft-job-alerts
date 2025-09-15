@@ -43,6 +43,26 @@
     "export_format": "md",
     "full_description": true,
     "min_salary_monthly": null
+  },
+  "profiles": {
+    "robotique68": {
+      "domain": "Robotique (ROS/vision)",
+      "selected_categories": [
+        "Robotique / ROS",
+        "Vision industrielle",
+        "ROS stack",
+        "Navigation / SLAM",
+        "Marques robots",
+        "Automatisme / PLC"
+      ],
+      "extra_keywords": ["ros2", "c++", "vision"],
+      "dept": "68",
+      "distance_km": 50,
+      "published_since_days": 7,
+      "topn": 100,
+      "export_format": "html",
+      "full_description": true,
+      "min_salary_monthly": null
+    }
   }
 }
-
