@@ -44,6 +44,22 @@
     "full_description": true,
     "min_salary_monthly": null
   },
+  "domain_categories": {
+    "Robotique (ROS/vision)": [
+      {"name": "Robotique / ROS", "keywords": ["ros2", "ros", "robotique", "robot"]},
+      {"name": "Vision industrielle", "keywords": ["vision", "opencv", "halcon", "cognex", "keyence"]},
+      {"name": "Navigation / SLAM", "keywords": ["navigation", "slam", "path planning"]},
+      {"name": "ROS stack", "keywords": ["moveit", "nav2", "gazebo", "urdf", "tf2", "pcl", "rclcpp", "rclpy", "colcon", "ament"]},
+      {"name": "Marques robots", "keywords": ["fanuc", "abb", "kuka", "staubli", "yaskawa", "ur"]},
+      {"name": "Automatisme / PLC", "keywords": ["automatisme", "plc", "grafcet", "siemens", "twincat"]},
+      {"name": "Capteurs", "keywords": ["lidar", "camera", "imu"]},
+      {"name": "Langages", "keywords": ["c++", "python"]},
+      {"name": "AGV / AMR / Mobile", "keywords": ["agv", "amr", "mobile robot", "fleet manager"]},
+      {"name": "IVVQ / Validation / Test", "keywords": ["ivvq", "validation", "intégration", "tests", "verification"]},
+      {"name": "Embarqué / Temps réel", "keywords": ["embarqué", "temps réel", "rtos", "stm32", "microcontrôleur"]},
+      {"name": "Intégration / Machines spéciales", "keywords": ["machine spéciale", "intégration", "îlot robotisé", "îlot robotise"]}
+    ]
+  },
   "profiles": {
     "robotique68": {
       "domain": "Robotique (ROS/vision)",

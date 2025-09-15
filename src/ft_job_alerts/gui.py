@@ -11,7 +11,7 @@ from argparse import Namespace
 from typing import Any, List
 
 from .config import load_config
-from .profiles import get_categories, get_domains, get_default_profile
+from .profiles import get_categories, get_domains, get_default_profile, get_domain_categories_map
 from .storage import init_db, query_offers
 from .exporter import export_txt, export_md, export_csv, export_jsonl, export_html
 from .cli import cmd_fetch
@@ -19,6 +19,7 @@ from .cli import cmd_fetch
 
 _CATEGORIES: List[tuple[str, list[str]]] = get_categories()
 _DOMAINS: List[tuple[str, List[str]]] = get_domains()
+_DOMAIN_CATS = get_domain_categories_map()
 
 
 def _open_folder(path: str) -> None:
@@ -76,12 +77,21 @@ class App(ttk.Frame):
         self.var_domain = tk.StringVar(value=_dom_default)
         self.opt_domain = ttk.OptionMenu(frm_cat, self.var_domain, _dom_default, *[d[0] for d in _DOMAINS], command=lambda *_: self._apply_domain_defaults())
         self.opt_domain.grid(row=0, column=1, sticky="w", padx=6)
-        self.var_cats: list[tk.BooleanVar] = []
-        for i, (label, _kw) in enumerate(_CATEGORIES):
-            var = tk.BooleanVar(value=False)
-            self.var_cats.append(var)
-            cb = ttk.Checkbutton(frm_cat, text=label, variable=var)
-            cb.grid(row=1 + (i // 2), column=i % 2, sticky="w", padx=6, pady=2)
+        # Categories: listbox + actions
+        ttk.Label(frm_cat, text="Catégories (multi‑sélection):").grid(row=1, column=0, sticky="ne")
+        frm_list = ttk.Frame(frm_cat)
+        frm_list.grid(row=1, column=1, columnspan=3, sticky="we")
+        self.lst_cats = tk.Listbox(frm_list, height=6, selectmode=tk.MULTIPLE, exportselection=False)
+        self.lst_cats.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        sb = ttk.Scrollbar(frm_list, orient=tk.VERTICAL, command=self.lst_cats.yview)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.lst_cats.configure(yscrollcommand=sb.set)
+        frm_act = ttk.Frame(frm_cat)
+        frm_act.grid(row=2, column=1, columnspan=3, sticky="w", pady=4)
+        ttk.Button(frm_act, text="Ajouter aux mots‑clés", command=self._on_add_categories).pack(side=tk.LEFT)
+        ttk.Button(frm_act, text="Remplacer les mots‑clés", command=self._on_replace_with_categories).pack(side=tk.LEFT, padx=6)
+        self.lbl_cat_hint = ttk.Label(frm_cat, text="", foreground="#777")
+        self.lbl_cat_hint.grid(row=3, column=1, columnspan=3, sticky="w")
 
         # Keywords extra
         frm_kw = ttk.Frame(self)
@@ -176,10 +186,12 @@ class App(ttk.Frame):
 
     def _apply_domain_defaults(self):
         label = self.var_domain.get() if hasattr(self, 'var_domain') else (_DOMAINS[1][0] if len(_DOMAINS) > 1 else _DOMAINS[0][0])
-        # Reset categories (aucune pré-sélection)
-        if hasattr(self, 'var_cats'):
-            for v in self.var_cats:
-                v.set(False)
+        # Populate categories for selected domain
+        cats = _DOMAIN_CATS.get(label) or []
+        if hasattr(self, 'lst_cats'):
+            self.lst_cats.delete(0, tk.END)
+            for name, _k in cats:
+                self.lst_cats.insert(tk.END, name)
         # No auto-fill of keywords; only show a hint based on domain
         hint = ""
         for name, kws in _DOMAINS:
@@ -190,6 +202,12 @@ class App(ttk.Frame):
             self.lbl_kw_hint.config(text=hint)
         if hasattr(self, 'ent_kw'):
             self.ent_kw.delete(0, tk.END)
+        # Category helper hint
+        if hasattr(self, 'lbl_cat_hint'):
+            if cats:
+                self.lbl_cat_hint.config(text="Sélectionnez des catégories puis ‘Ajouter’ ou ‘Remplacer’ vos mots‑clés.")
+            else:
+                self.lbl_cat_hint.config(text="Aucune catégorie pour ce domaine — saisissez vos mots‑clés librement.")
         # Apply other numeric defaults if provided
         # Apply location/time defaults only (no categories/keywords auto-fill)
         prof = self.profile if isinstance(self.profile, dict) else {}
@@ -232,15 +250,13 @@ class App(ttk.Frame):
         self.log.update_idletasks()
 
     def _gather_inputs(self) -> dict[str, Any]:
+        # Build keywords strictly from the field (categories are explicit via buttons)
         kw: list[str] = []
-        for var, (_, lst) in zip(self.var_cats, _CATEGORIES):
-            if var.get():
-                kw.extend(lst)
         extra = self.ent_kw.get().strip()
         if extra:
             kw.extend([k.strip() for k in extra.split(",") if k.strip()])
-        seen = set()
-        kw = [k for k in kw if not (k in seen or seen.add(k))] or self.cfg.default_keywords
+        if not kw:
+            kw = self.cfg.default_keywords
 
         loc_mode = self.loc_choice.get()
         dept = self.ent_dept.get().strip() if loc_mode == "dept" else None

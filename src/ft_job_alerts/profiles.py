@@ -72,11 +72,13 @@ def _load_json(path: str) -> Dict[str, Any] | None:
         return None
 
 
-def load_profiles_config() -> tuple[List[Tuple[str, List[str]]], List[Tuple[str, List[str]]], Dict[str, Any] | None, Dict[str, Dict[str, Any]]]:
+def load_profiles_config() -> tuple[List[Tuple[str, List[str]]], List[Tuple[str, List[str]]], Dict[str, Any] | None, Dict[str, Dict[str, Any]], Dict[str, List[Tuple[str, List[str]]]]]:
     path = os.getenv("PROFILES_PATH", os.path.join("data", "profiles.json"))
     data = _load_json(path)
     if not data:
-        return _builtin_categories(), _builtin_domains(), None, {}
+        # No custom file: global categories available for robotics domain
+        dom_map = {"Robotique (ROS/vision)": _builtin_categories()}
+        return _builtin_categories(), _builtin_domains(), None, {}, dom_map
 
     def _coerce_pairs(items: Any) -> List[Tuple[str, List[str]]]:
         out: List[Tuple[str, List[str]]] = []
@@ -98,21 +100,36 @@ def load_profiles_config() -> tuple[List[Tuple[str, List[str]]], List[Tuple[str,
     profiles = data.get("profiles") if isinstance(data.get("profiles"), dict) else {}
     # Ensure all profiles are dicts
     profiles = {str(k): v for k, v in profiles.items() if isinstance(v, dict)} if profiles else {}
-    return cats, doms, default_profile, profiles
+    # Domain-specific categories mapping (optional)
+    dom_cats_raw = data.get("domain_categories") if isinstance(data.get("domain_categories"), dict) else {}
+    dom_cats: Dict[str, List[Tuple[str, List[str]]]] = {}
+    for dom_name, items in (dom_cats_raw or {}).items():
+        try:
+            dom_cats[str(dom_name)] = [
+                (str(it.get("name", "")).strip(), [str(k).strip() for k in it.get("keywords", []) if str(k).strip()])
+                for it in items if isinstance(it, dict)
+            ]
+        except Exception:
+            continue
+    # Fallback: if robotics domain exists and not present in map, attach builtin categories
+    for name, _ in doms:
+        if name.lower().startswith("robotique") and name not in dom_cats:
+            dom_cats[name] = _builtin_categories()
+    return cats, doms, default_profile, profiles, dom_cats
 
 
 def get_categories() -> List[Tuple[str, List[str]]]:
-    cats, _doms, _prof, _profiles = load_profiles_config()
+    cats, _doms, _prof, _profiles, _dom_map = load_profiles_config()
     return cats
 
 
 def get_domains() -> List[Tuple[str, List[str]]]:
-    _cats, doms, _prof, _profiles = load_profiles_config()
+    _cats, doms, _prof, _profiles, _dom_map = load_profiles_config()
     return doms
 
 
 def list_profiles() -> Dict[str, Dict[str, Any]]:
-    _cats, _doms, _prof, profiles = load_profiles_config()
+    _cats, _doms, _prof, profiles, _dom_map = load_profiles_config()
     return profiles
 
 
@@ -123,7 +140,7 @@ def get_profile_by_name(name: str) -> Dict[str, Any] | None:
 def get_default_profile(name_override: str | None = None) -> Dict[str, Any] | None:
     if name_override:
         return get_profile_by_name(name_override)
-    _cats, _doms, prof, _profiles = load_profiles_config()
+    _cats, _doms, prof, _profiles, _dom_map = load_profiles_config()
     return prof
 
 
@@ -140,3 +157,8 @@ def build_keywords_from_profile(profile: Dict[str, Any]) -> List[str]:
         kws.extend([str(k).strip() for k in extra if str(k).strip()])
     seen = set()
     return [k for k in kws if not (k in seen or seen.add(k))]
+
+
+def get_domain_categories_map() -> Dict[str, List[Tuple[str, List[str]]]]:
+    _cats, _doms, _prof, _profiles, dom_map = load_profiles_config()
+    return dom_map
