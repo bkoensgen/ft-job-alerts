@@ -145,7 +145,7 @@ class App(ttk.Frame):
         # Buttons
         frm_btn = ttk.Frame(self)
         frm_btn.pack(fill=tk.X, padx=10, pady=6)
-        self.var_clear = tk.BooleanVar(value=False)
+        self.var_clear = tk.BooleanVar(value=True)
         ttk.Checkbutton(frm_btn, text="Nettoyer la base avant la recherche", variable=self.var_clear).pack(side=tk.LEFT, padx=6)
         self.btn_run = ttk.Button(frm_btn, text="Lancer", command=self._on_run)
         self.btn_run.pack(side=tk.LEFT)
