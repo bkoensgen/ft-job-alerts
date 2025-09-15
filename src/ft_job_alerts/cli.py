@@ -142,6 +142,19 @@ def cmd_fetch(args):
     # AND/OR matching mode for keywords (client-side)
     require_all = keywords if kw_mode == "and" and len(keywords) > 0 else None
 
+    # Prepare score weights (passed via module-global for simplicity)
+    score_weights = {}
+    for k in ("score_w_keywords","score_w_distance","score_w_salary"):
+        if getattr(args, k, None) is not None:
+            key = {
+                "score_w_keywords": "w_keywords",
+                "score_w_distance": "w_distance",
+                "score_w_salary": "w_salary",
+            }[k]
+            score_weights[key] = float(getattr(args, k))
+    if score_weights:
+        import ft_job_alerts.cli_utils as cu
+        cu.__score_weights__ = score_weights  # type: ignore[attr-defined]
     prepared = dedup_and_prepare_offers(
         raw,
         rome_codes=rome_codes,
@@ -157,6 +170,12 @@ def cmd_fetch(args):
 
     inserted = upsert_offers(prepared)
     print(f"Prepared: {len(prepared)} offers; inserted/updated: {inserted}")
+    if score_weights:
+        try:
+            import ft_job_alerts.cli_utils as cu
+            delattr(cu, "__score_weights__")
+        except Exception:
+            pass
 
 
 def cmd_run_daily(args):

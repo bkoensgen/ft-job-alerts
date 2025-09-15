@@ -142,6 +142,21 @@ class App(ttk.Frame):
         self.ent_salary = ttk.Entry(frm_tx, width=10)
         self.ent_salary.grid(row=1, column=1, sticky="w", padx=6)
 
+        # Scoring weights
+        frm_w = ttk.LabelFrame(self, text="Pondération du tri")
+        frm_w.pack(fill=tk.X, padx=10, pady=8)
+        self.w_kw = tk.DoubleVar(value=1.0)
+        self.w_dist = tk.DoubleVar(value=1.0)
+        self.w_sal = tk.DoubleVar(value=1.0)
+        ttk.Label(frm_w, text="Mots-clés").grid(row=0, column=0, sticky="e")
+        ttk.Scale(frm_w, from_=0.0, to=3.0, orient=tk.HORIZONTAL, variable=self.w_kw, length=180).grid(row=0, column=1, sticky="we", padx=6)
+        ttk.Label(frm_w, text="Proximité").grid(row=0, column=2, sticky="e")
+        ttk.Scale(frm_w, from_=0.0, to=3.0, orient=tk.HORIZONTAL, variable=self.w_dist, length=180).grid(row=0, column=3, sticky="we", padx=6)
+        ttk.Label(frm_w, text="Salaire").grid(row=0, column=4, sticky="e")
+        ttk.Scale(frm_w, from_=0.0, to=3.0, orient=tk.HORIZONTAL, variable=self.w_sal, length=180).grid(row=0, column=5, sticky="we", padx=6)
+        frm_w.columnconfigure(1, weight=1)
+        frm_w.columnconfigure(3, weight=1)
+
         # Buttons
         frm_btn = ttk.Frame(self)
         frm_btn.pack(fill=tk.X, padx=10, pady=6)
@@ -262,6 +277,9 @@ class App(ttk.Frame):
             fmt=fmt,
             desc_chars=desc_chars,
             min_salary=min_salary,
+            w_keywords=self.w_kw.get() if hasattr(self, 'w_kw') else 1.0,
+            w_distance=self.w_dist.get() if hasattr(self, 'w_dist') else 1.0,
+            w_salary=self.w_sal.get() if hasattr(self, 'w_sal') else 0.0,
         )
 
     def _on_run(self):
@@ -323,6 +341,9 @@ class App(ttk.Frame):
                 fetch_all=True,
                 max_pages=10,
                 no_smart_filter=True,
+                score_w_keywords=params.get("w_keywords"),
+                score_w_distance=params.get("w_distance"),
+                score_w_salary=params.get("w_salary"),
             )
             cmd_fetch(fargs)
 

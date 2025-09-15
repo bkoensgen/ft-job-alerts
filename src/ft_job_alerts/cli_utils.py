@@ -102,7 +102,9 @@ def dedup_and_prepare_offers(
                 continue
         n["rome_codes"] = rome_codes or []
         n["keywords"] = keywords
-        n["score"] = score_offer(r, base_lat=base_lat, base_lon=base_lon)
+        # Optional weights for scoring
+        score_w = globals().get("__score_weights__", None)
+        n["score"] = score_offer(n, base_lat=base_lat, base_lon=base_lon, weights=score_w)
         try:
             import json as _json
             n["raw_json"] = _json.dumps(r, ensure_ascii=False)
