@@ -72,11 +72,11 @@ def _load_json(path: str) -> Dict[str, Any] | None:
         return None
 
 
-def load_profiles_config() -> tuple[List[Tuple[str, List[str]]], List[Tuple[str, List[str]]], Dict[str, Any] | None]:
+def load_profiles_config() -> tuple[List[Tuple[str, List[str]]], List[Tuple[str, List[str]]], Dict[str, Any] | None, Dict[str, Dict[str, Any]]]:
     path = os.getenv("PROFILES_PATH", os.path.join("data", "profiles.json"))
     data = _load_json(path)
     if not data:
-        return _builtin_categories(), _builtin_domains(), None
+        return _builtin_categories(), _builtin_domains(), None, {}
 
     def _coerce_pairs(items: Any) -> List[Tuple[str, List[str]]]:
         out: List[Tuple[str, List[str]]] = []
@@ -95,20 +95,48 @@ def load_profiles_config() -> tuple[List[Tuple[str, List[str]]], List[Tuple[str,
     cats = _coerce_pairs(data.get("categories")) or _builtin_categories()
     doms = _coerce_pairs(data.get("domains")) or _builtin_domains()
     default_profile = data.get("default_profile") if isinstance(data.get("default_profile"), dict) else None
-    return cats, doms, default_profile
+    profiles = data.get("profiles") if isinstance(data.get("profiles"), dict) else {}
+    # Ensure all profiles are dicts
+    profiles = {str(k): v for k, v in profiles.items() if isinstance(v, dict)} if profiles else {}
+    return cats, doms, default_profile, profiles
 
 
 def get_categories() -> List[Tuple[str, List[str]]]:
-    cats, _doms, _prof = load_profiles_config()
+    cats, _doms, _prof, _profiles = load_profiles_config()
     return cats
 
 
 def get_domains() -> List[Tuple[str, List[str]]]:
-    _cats, doms, _prof = load_profiles_config()
+    _cats, doms, _prof, _profiles = load_profiles_config()
     return doms
 
 
-def get_default_profile() -> Dict[str, Any] | None:
-    _cats, _doms, prof = load_profiles_config()
+def list_profiles() -> Dict[str, Dict[str, Any]]:
+    _cats, _doms, _prof, profiles = load_profiles_config()
+    return profiles
+
+
+def get_profile_by_name(name: str) -> Dict[str, Any] | None:
+    return list_profiles().get(name)
+
+
+def get_default_profile(name_override: str | None = None) -> Dict[str, Any] | None:
+    if name_override:
+        return get_profile_by_name(name_override)
+    _cats, _doms, prof, _profiles = load_profiles_config()
     return prof
 
+
+def build_keywords_from_profile(profile: Dict[str, Any]) -> List[str]:
+    """Compose a deduplicated keyword list from selected categories and extra keywords."""
+    cats = get_categories()
+    cat_map = {label: kws for label, kws in cats}
+    kws: List[str] = []
+    for name in profile.get("selected_categories", []) or []:
+        if name in cat_map:
+            kws.extend(cat_map[name])
+    extra = profile.get("extra_keywords", []) or []
+    if isinstance(extra, list):
+        kws.extend([str(k).strip() for k in extra if str(k).strip()])
+    seen = set()
+    return [k for k in kws if not (k in seen or seen.add(k))]

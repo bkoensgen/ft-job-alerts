@@ -70,6 +70,8 @@ Most useful commands
 - Export CSV (full fields) and JSONL:
   - `python run.py export --format csv --days 31 --outfile data/out/offres.csv`
   - `python run.py export --format jsonl --days 31 --outfile data/out/offres.jsonl`
+ - Export HTML (lisible pour partage/conseillère):
+  - `python run.py export --format html --days 31 --min-score 2.0 --top 100 --desc-chars 600`
 
 One-shot pipelines
 - Daily (France entière par défaut), fetch → enrich → export:
@@ -178,4 +180,9 @@ Profiles and categories (optional)
 - The GUI/TUI categories, domains and default selections can be customized via a JSON file.
 - Point `PROFILES_PATH` in your `.env` to your config (default: `data/profiles.json`).
 - See `data/profiles.example.json` for the schema and a robotics‑oriented default profile (dept 68, radius 50 km, ROS/vision).
+- You can also define multiple named profiles under `profiles` and target them:
+  - List: `python run.py profiles --list`
+  - GUI with a profile: `python run.py gui --profile mon_profil`
+  - TUI with a profile: `python run.py tui --profile mon_profil`
+  - Pipelines: `python run.py pipeline daily --profile mon_profil` (override keywords/localisation)
 - If the file is missing, built‑in defaults are used.

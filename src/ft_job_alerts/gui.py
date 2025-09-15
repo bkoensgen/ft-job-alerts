@@ -19,7 +19,6 @@ from .cli import cmd_fetch
 
 _CATEGORIES: List[tuple[str, list[str]]] = get_categories()
 _DOMAINS: List[tuple[str, List[str]]] = get_domains()
-_DEFAULT_PROFILE = get_default_profile() or {}
 
 
 def _open_folder(path: str) -> None:
@@ -49,11 +48,13 @@ def _ai_prompt_text(out_path: str) -> str:
 
 
 class App(ttk.Frame):
-    def __init__(self, master: tk.Tk):
+    def __init__(self, master: tk.Tk, profile_name: str | None = None):
         super().__init__(master)
         self.master = master
         self.pack(fill=tk.BOTH, expand=True)
         self.cfg = load_config()
+        # Load profile (default or named)
+        self.profile = get_default_profile(profile_name) or {}
         self._build_ui()
 
     def _build_ui(self):
@@ -71,7 +72,7 @@ class App(ttk.Frame):
         frm_cat.pack(fill=tk.X, padx=10, pady=8)
         ttk.Label(frm_cat, text="Domaine:").grid(row=0, column=0, sticky="e")
         # Determine default domain label
-        _dom_default = _DEFAULT_PROFILE.get("domain") or (_DOMAINS[1][0] if len(_DOMAINS) > 1 else _DOMAINS[0][0])
+        _dom_default = (self.profile.get("domain") if isinstance(self.profile, dict) else None) or (_DOMAINS[1][0] if len(_DOMAINS) > 1 else _DOMAINS[0][0])
         self.var_domain = tk.StringVar(value=_dom_default)
         self.opt_domain = ttk.OptionMenu(frm_cat, self.var_domain, _dom_default, *[d[0] for d in _DOMAINS], command=lambda *_: self._apply_domain_defaults())
         self.opt_domain.grid(row=0, column=1, sticky="w", padx=6)
@@ -128,7 +129,7 @@ class App(ttk.Frame):
         self.ent_top.grid(row=0, column=3, sticky="w", padx=6)
         ttk.Label(frm_tx, text="Format:").grid(row=0, column=4, sticky="e")
         self.var_fmt = tk.StringVar(value="md")
-        ttk.OptionMenu(frm_tx, self.var_fmt, "md", "md", "txt", "csv", "jsonl").grid(row=0, column=5, sticky="w")
+        ttk.OptionMenu(frm_tx, self.var_fmt, "md", "md", "txt", "html", "csv", "jsonl").grid(row=0, column=5, sticky="w")
         self.var_full = tk.BooleanVar(value=True)
         ttk.Checkbutton(frm_tx, text="Description complète (txt/md)", variable=self.var_full).grid(row=0, column=6, sticky="w", padx=6)
         # Salary min
@@ -158,7 +159,7 @@ class App(ttk.Frame):
             for v in self.var_cats:
                 v.set(False)
         # Apply defaults from profile when available
-        prof = _DEFAULT_PROFILE if isinstance(_DEFAULT_PROFILE, dict) else {}
+        prof = self.profile if isinstance(self.profile, dict) else {}
         sel_cats = {s for s in prof.get("selected_categories", []) if isinstance(s, str)}
         # For robotics, enable smart filter by default
         self.var_smart.set(label.startswith("Robotique"))
@@ -339,7 +340,7 @@ class App(ttk.Frame):
             self.btn_run.configure(state=tk.NORMAL)
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(profile_name: str | None = None) -> None:
     root = tk.Tk()
     # Use ttk theme if available
     try:
@@ -350,5 +351,5 @@ def main(argv: list[str] | None = None) -> None:
             style.theme_use(style.theme_use())  # keep default
     except Exception:
         pass
-    App(root)
+    App(root, profile_name=profile_name)
     root.mainloop()

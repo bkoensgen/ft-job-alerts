@@ -170,3 +170,61 @@ def export_jsonl(rows, outfile: str | None = None) -> str:
             # Keep raw_json as is; consumers can parse if needed
             f.write(json.dumps(obj, ensure_ascii=False) + "\n")
     return outfile
+
+
+def export_html(rows, outfile: str | None = None, desc_chars: int | None = 600) -> str:
+    outdir = _ensure_out_dir()
+    if not outfile:
+        ts = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+        outfile = os.path.join(outdir, f"offres-{ts}.html")
+    def esc(s: str) -> str:
+        import html
+        return html.escape(s, quote=True)
+    with open(outfile, "w", encoding="utf-8") as f:
+        f.write("<!doctype html><html lang=\"fr\"><meta charset=\"utf-8\"><title>Offres (sélection)</title>")
+        f.write("<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;margin:24px;} .card{border:1px solid #ddd;border-radius:8px;padding:12px 14px;margin:12px 0;} .meta{color:#555;font-size:0.9em;margin:6px 0;} .tags{font-size:0.85em;color:#333} .tag{display:inline-block;background:#f2f2f2;border-radius:12px;padding:2px 8px;margin:2px} h2{margin:0 0 6px;} .score{color:#0a6} .link a{color:#06c;text-decoration:none} .link a:hover{text-decoration:underline}</style>")
+        f.write("<h1>Offres (sélection)</h1>")
+        for r0 in rows:
+            r = _row_to_dict(r0)
+            labels = {k: r.get(k) for k in ("CORE_ROBOTICS","ADJACENT_CATEGORIES","REMOTE","SENIORITY","PLC_TAGS","LANG_TAGS","SENSOR_TAGS","AGENCY","ROS_STACK","ROBOT_BRANDS","VISION_LIBS")}
+            if labels.get("CORE_ROBOTICS") is None:
+                labels = compute_labels(r)
+            loc_detail = f"{r.get('city','')} ({r.get('department','')})" if r.get("city") else r.get("location", "")
+            link = r.get("url") or r.get("apply_url") or (f"https://candidat.francetravail.fr/offres/recherche/detail/{r.get('offer_id')}" if r.get("offer_id") else "")
+            f.write("<div class=\"card\">")
+            f.write(f"<h2>{esc(str(r.get('title','')))} <span class=\"score\">({float(r.get('score',0)):.2f})</span></h2>")
+            f.write("<div class=\"meta\">")
+            f.write(f"ID: <code>{esc(str(r.get('offer_id','')))}</code> • ")
+            f.write(f"Entreprise: {esc(str(r.get('company','')))} • ")
+            f.write(f"Lieu: {esc(loc_detail)} • ")
+            f.write(f"Contrat: {esc(str(r.get('contract_type','')))} • ")
+            f.write(f"Publiée: {esc(str(r.get('published_at','')))}")
+            f.write("</div>")
+            if link:
+                f.write(f"<div class=\"link\"><a href=\"{esc(link)}\" target=\"_blank\">Voir l’offre / Postuler</a></div>")
+            shortage = r.get("offres_manque_candidats")
+            chips = []
+            if labels.get("CORE_ROBOTICS"): chips.append("Core: robotics/ROS")
+            if labels.get("REMOTE"): chips.append("Remote/Hybrid")
+            if labels.get("AGENCY"): chips.append("Agence/ESN")
+            ssen = labels.get("SENIORITY")
+            if ssen and ssen != "unspecified": chips.append(ssen)
+            if shortage: chips.append("Tension")
+            f.write("<div class=\"tags\">")
+            for c in chips:
+                f.write(f"<span class=\"tag\">{esc(str(c))}</span>")
+            for name in ("PLC_TAGS","LANG_TAGS","SENSOR_TAGS","ROS_STACK","ROBOT_BRANDS","VISION_LIBS"):
+                arr = labels.get(name) or []
+                for t in arr:
+                    f.write(f"<span class=\"tag\">{esc(str(t))}</span>")
+            f.write("</div>")
+            desc = r.get("description") or ""
+            if desc_chars == 0:
+                desc = ""
+            elif desc_chars is not None and desc_chars > 0 and len(desc) > desc_chars:
+                desc = desc[: desc_chars].rstrip() + "…"
+            if desc:
+                f.write(f"<div>{esc(desc).replace('\n','<br>')}</div>")
+            f.write("</div>")
+        f.write("</html>")
+    return outfile

@@ -12,7 +12,7 @@ from .filters import is_relevant
 from .notifier import format_offers, notify
 from .scoring import score_offer
 from .storage import due_followups, init_db, recent_new_offers, upsert_offers, mark_notified, query_offers
-from .exporter import export_txt, export_md, export_csv, export_jsonl
+from .exporter import export_txt, export_md, export_csv, export_jsonl, export_html
 from .tags import compute_labels
 from .nlp import tokenize, bigrams, log_odds_with_prior
 from .storage import update_offer_details
@@ -20,6 +20,7 @@ from .charts import build_charts
 from .normalizer import normalize_offer
 from .profiles import get_categories as _get_cats, get_domains as _get_doms, get_default_profile as _get_prof
 from .cli_utils import dedup_and_prepare_offers, sanitize_published_since
+from .profiles import get_profile_by_name, get_default_profile as _profiles_default, build_keywords_from_profile, list_profiles
 
 
 """CLI entry with subcommands. Most helpers are factored in normalizer/cli_utils modules."""
@@ -159,6 +160,8 @@ def cmd_export(args):
         path = export_txt(rows, args.outfile, desc_chars=args.desc_chars)
     elif args.format == "md":
         path = export_md(rows, args.outfile, desc_chars=args.desc_chars)
+    elif args.format == "html":
+        path = export_html(rows, args.outfile, desc_chars=args.desc_chars)
     elif args.format == "csv":
         path = export_csv(rows, args.outfile)
     else:
@@ -180,10 +183,7 @@ def cmd_sweep(args):
     distance_km = args.distance_km
 
     # Normalize publieeDepuis
-    pdays = args.published_since_days
-    allowed = [1, 3, 7, 14, 31]
-    if pdays not in allowed:
-        pdays = min(allowed, key=lambda x: abs(x - pdays))
+    pdays = sanitize_published_since(args.published_since_days)
 
     total_prepared = 0
     keywords_groups = [k.strip() for k in str(args.keywords_list).split(";") if k.strip()]
@@ -542,6 +542,28 @@ def cmd_enrich(args):
 
 
 def cmd_pipeline_daily(args):
+    # Apply profile overrides if provided
+    prof = get_profile_by_name(getattr(args, "profile", None)) if getattr(args, "profile", None) else None
+    if prof:
+        kw = build_keywords_from_profile(prof)
+        if kw:
+            args.keywords = ",".join(kw)
+        args.dept = prof.get("dept") or args.dept
+        if prof.get("commune"):
+            args.commune = prof.get("commune")
+        if prof.get("distance_km") is not None:
+            args.distance_km = prof.get("distance_km")
+        if prof.get("published_since_days") is not None:
+            args.published_since_days = int(prof.get("published_since_days"))
+        if prof.get("topn") is not None:
+            args.export_top = int(prof.get("topn"))
+        if prof.get("export_format") is not None:
+            ef = str(prof.get("export_format")).lower()
+            if ef in ("md","txt","html"):
+                args.export_format = ef
+        if prof.get("full_description") is not None:
+            args.desc_chars = -1 if bool(prof.get("full_description")) else args.desc_chars
+
     # 1) Fetch (optionally multi-page)
     fargs = Namespace(
         keywords=args.keywords,
@@ -598,6 +620,17 @@ def cmd_pipeline_daily(args):
 
 
 def cmd_pipeline_weekly(args):
+    # Apply profile overrides (location/time)
+    prof = get_profile_by_name(getattr(args, "profile", None)) if getattr(args, "profile", None) else None
+    if prof:
+        args.dept = prof.get("dept") or args.dept
+        if prof.get("commune"):
+            args.commune = prof.get("commune")
+        if prof.get("distance_km") is not None:
+            args.distance_km = prof.get("distance_km")
+        if prof.get("published_since_days") is not None:
+            args.published_since_days = int(prof.get("published_since_days"))
+
     # 1) Sweep multiple keywords (OR)
     swargs = Namespace(
         keywords_list=args.keywords_list,
@@ -706,7 +739,7 @@ def cmd_pipeline_weekly(args):
     cmd_charts(cargs)
 
 
-def cmd_tui(_args):
+def cmd_tui(args):
     # Minimal interactive menu to help non-technical users select categories, days, and location
     from argparse import Namespace as _NS
     import os as _os
@@ -719,7 +752,9 @@ def cmd_tui(_args):
 
     categories = _get_cats()
     domains = _get_doms()
-    default_profile = _get_prof() or {}
+    # allow named profile override
+    prof_name = getattr(args, "profile", None)
+    default_profile = _get_prof(prof_name) or {}
 
     def ask(prompt: str, default: str | None = None) -> str:
         sfx = f" [{default}]" if default is not None else ""
@@ -842,7 +877,7 @@ def cmd_tui(_args):
     except Exception:
         topn = 100
     dflt_fmt = (default_profile.get("export_format") if isinstance(default_profile, dict) else None) or "md"
-    fmt = ask("  Format d'export (txt/md/csv/jsonl)", str(dflt_fmt)).lower() or "md"
+    fmt = ask("  Format d'export (txt/md/html/csv/jsonl)", str(dflt_fmt)).lower() or "md"
     dflt_full = bool(default_profile.get("full_description")) if isinstance(default_profile, dict) and default_profile.get("full_description") is not None else True
     full_desc = fmt in ("md", "txt") and ask_yes("  Inclure la description complète ?", dflt_full)
     desc_chars = -1 if full_desc else (500 if fmt == "md" else 400)
@@ -907,12 +942,14 @@ def cmd_tui(_args):
         limit=topn,
         order_by="score_desc",
     )
-    from .exporter import export_txt, export_md, export_csv, export_jsonl
+    from .exporter import export_txt, export_md, export_csv, export_jsonl, export_html
     _os.makedirs("data/out", exist_ok=True)
     if fmt == "txt":
         out_path = export_txt(rows, None, desc_chars=desc_chars if isinstance(desc_chars, int) else 400)
     elif fmt == "md":
         out_path = export_md(rows, None, desc_chars=desc_chars if isinstance(desc_chars, int) else 500)
+    elif fmt == "html":
+        out_path = export_html(rows, None, desc_chars=desc_chars if isinstance(desc_chars, int) else 600)
     elif fmt == "csv":
         out_path = export_csv(rows, None)
     else:
@@ -994,8 +1031,8 @@ def build_parser() -> argparse.ArgumentParser:
                        help="Allowed values: 1,3,7,14,31 (auto-snap to nearest)")
     s_run.set_defaults(func=cmd_run_daily)
 
-    s_export = sub.add_parser("export", help="Export offers (txt/csv/md/jsonl) for analysis")
-    s_export.add_argument("--format", choices=["txt", "csv", "md", "jsonl"], default="txt")
+    s_export = sub.add_parser("export", help="Export offers (txt/md/html/csv/jsonl) for analysis")
+    s_export.add_argument("--format", choices=["txt", "md", "html", "csv", "jsonl"], default="txt")
     s_export.add_argument("--days", type=int, default=None, help="Window on inserted_at (last N days)")
     s_export.add_argument("--from", dest="from_date", default=None, help="From date YYYY-MM-DD (inserted_at)")
     s_export.add_argument("--to", dest="to_date", default=None, help="To date YYYY-MM-DD (inserted_at)")
@@ -1086,12 +1123,13 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Fetch multiple pages (default on)")
     p_daily.add_argument("--max-pages", type=int, default=10)
     p_daily.add_argument("--export-top", type=int, default=200)
-    p_daily.add_argument("--export-format", choices=["md","txt"], default="md")
+    p_daily.add_argument("--export-format", choices=["md","txt","html"], default="md")
     p_daily.add_argument("--min-score", type=float, default=2.0)
     p_daily.add_argument("--desc-chars", type=int, default=-1)
     p_daily.add_argument("--enrich", action="store_true", default=True)
     p_daily.add_argument("--enrich-limit", type=int, default=500)
     p_daily.add_argument("--enrich-sleep-ms", type=int, default=200)
+    p_daily.add_argument("--profile", default=None, help="Nom d'un profil (data/profiles.json) pour préremplir mots-clés/localisation")
     p_daily.set_defaults(func=cmd_pipeline_daily)
 
     p_week = pipe_sub.add_parser("weekly", help="Weekly preset: sweep → enrich → export → stats → nlp-stats")
@@ -1113,6 +1151,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_week.add_argument("--nlp-stop-add", default="poste;profil;mission;client;vous;h/f;cdi;interim;operateur;soudure;pieces;equipements")
     p_week.add_argument("--nlp-outfile-tokens", default="data/out/tokens.csv")
     p_week.add_argument("--nlp-outfile-bigrams", default="data/out/bigrams.csv")
+    p_week.add_argument("--profile", default=None, help="Nom d'un profil (data/profiles.json) pour préremplir localisation")
     p_week.set_defaults(func=cmd_pipeline_weekly)
 
     # Watchlist companies (top by count in window)
@@ -1138,11 +1177,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     # GUI (Tkinter)
     s_gui = sub.add_parser("gui", help="Interface graphique (sélection simple → fetch+export)")
+    s_gui.add_argument("--profile", default=None, help="Nom d'un profil (data/profiles.json) pour pré-remplir la GUI")
     s_gui.set_defaults(func=cmd_gui)
 
     # TUI (interactive helper)
     s_tui = sub.add_parser("tui", help="Assistant interactif (sélection catégories/jours/localisation → fetch+export)")
+    s_tui.add_argument("--profile", default=None, help="Nom d'un profil (data/profiles.json) pour pré-remplir la TUI")
     s_tui.set_defaults(func=cmd_tui)
+
+    # Profiles helper
+    s_profiles = sub.add_parser("profiles", help="Afficher les profils, domaines et catégories")
+    s_profiles.add_argument("--list", action="store_true", help="Lister les profils nommés")
+    s_profiles.set_defaults(func=cmd_profiles)
 
     return p
 
@@ -1168,13 +1214,38 @@ def cmd_auth_check(_args):
         print("Auth error:", e)
 
 
-def cmd_gui(_args):
+def cmd_gui(args):
     # Launch Tkinter GUI for non-technical users
     try:
         from .gui import main as gui_main
     except Exception as e:
         raise SystemExit(f"GUI indisponible: {e}")
-    gui_main(None)
+    gui_main(getattr(args, "profile", None))
+
+
+def cmd_profiles(args):
+    profs = list_profiles()
+    default_prof = _profiles_default()
+    if getattr(args, "list", False):
+        if not profs:
+            print("No named profiles. Edit data/profiles.json to add some under 'profiles'.")
+        else:
+            print("Named profiles:")
+            for name in sorted(profs.keys()):
+                p = profs[name]
+                dom = p.get("domain") or ""
+                cats = ", ".join(p.get("selected_categories", []) or [])
+                print(f"- {name}: domain={dom} | categories=[{cats}]")
+        if default_prof:
+            print("\nDefault profile present (used when no name is given).")
+        return
+    # Default: show default profile
+    if default_prof:
+        from pprint import pprint
+        print("Default profile:")
+        pprint(default_prof)
+    else:
+        print("No default_profile configured.")
 
 
 if __name__ == "__main__":
