@@ -11,9 +11,8 @@ What’s included
 Quick start
 1) Python 3.10+ recommended. Create a virtualenv (optional). Env vars can be put in `.env` (auto‑loaded) — see `.env.example`. At minimum:
    - FT_CLIENT_ID / FT_CLIENT_SECRET (from your habilitation)
-   - Prefer running in simulate mode first: FT_API_SIMULATE=1
 
-2) Initialize DB and run once in simulate mode (no install needed):
+2) Initialize DB and run once:
    - python run.py init-db
    - python run.py fetch --keywords "ros2,c++,vision" --dept 68 --radius-km 50
    - python run.py export --format txt --days 7 --top 50 --desc-chars 500  # writes under data/out/
@@ -47,7 +46,6 @@ Endpoints (defaults — verify with current docs)
 - Offres detail: https://api.francetravail.io/partenaire/offresdemploi/v2/offres/{id}
 
 Notes
-- Network calls are disabled in this environment; simulate mode provides realistic flow. Replace simulate with real endpoints once credentials are set.
 - ROME 4.0 and La Bonne Boîte clients are stubbed for now; provide codes via CLI/env, or later plug real APIs.
 
 Most useful commands

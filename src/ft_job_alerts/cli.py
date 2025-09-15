@@ -44,10 +44,6 @@ def cmd_fetch(args):
     client = OffresEmploiClient(cfg, auth)
     rome = ROMEClient(cfg)
 
-    if cfg.api_simulate:
-        print("[info] FT_API_SIMULATE=1 → utilisation des données d'exemple locales (pas d'appel réseau)")
-        print("       Mettez FT_API_SIMULATE=0 + FT_CLIENT_ID/FT_CLIENT_SECRET pour interroger l'API réelle.")
-
     keywords = [k.strip() for k in args.keywords.split(",") if k.strip()] if args.keywords else cfg.default_keywords
     rome_codes = []
     if args.rome:

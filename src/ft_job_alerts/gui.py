@@ -62,10 +62,10 @@ class App(ttk.Frame):
         self.master.minsize(760, 560)
         self.master.geometry("860x640")
 
+        # Top bar (no simulate/real mode banner anymore)
         top = ttk.Frame(self)
         top.pack(fill=tk.X, padx=10, pady=8)
-        mode = "SIMULATE (local)" if self.cfg.api_simulate else "REAL API"
-        ttk.Label(top, text=f"Mode: {mode}").pack(side=tk.LEFT)
+        ttk.Label(top, text="France Travail — Recherche d'offres").pack(side=tk.LEFT)
 
         # Domain & Categories
         frm_cat = ttk.LabelFrame(self, text="Domaine et catégories")

@@ -61,7 +61,7 @@ class Config:
 def load_config() -> Config:
     _load_dotenv_if_present()
     return Config(
-        api_simulate=_get_bool("FT_API_SIMULATE", True),
+        api_simulate=_get_bool("FT_API_SIMULATE", False),
         client_id=os.getenv("FT_CLIENT_ID"),
         client_secret=os.getenv("FT_CLIENT_SECRET"),
         auth_url=os.getenv(
