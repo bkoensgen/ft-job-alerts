@@ -256,6 +256,14 @@ def mark_notified(offer_ids: list[str]) -> None:
     con.close()
 
 
+def clear_offers() -> None:
+    con = connect()
+    cur = con.cursor()
+    cur.execute("DELETE FROM offers;")
+    con.commit()
+    con.close()
+
+
 def query_offers(
     *,
     days: int | None = None,

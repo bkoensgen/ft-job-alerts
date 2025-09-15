@@ -112,6 +112,8 @@ def cmd_fetch(args):
             base_lat, base_lon = clat, clon
         else:
             print("[warn] Centre géographique non résolu pour la commune — filtre rayon non appliqué côté client.")
+    # Apply strict client-side radius only in simulate mode (server already filters in real API)
+    use_client_radius = bool(cfg.api_simulate and center_lat is not None and center_lon is not None and distance_km is not None)
     prepared = dedup_and_prepare_offers(
         raw,
         rome_codes=rome_codes,
@@ -119,9 +121,9 @@ def cmd_fetch(args):
         base_lat=base_lat,
         base_lon=base_lon,
         apply_relevance=not bool(getattr(args, "no_smart_filter", False)),
-        center_lat=center_lat,
-        center_lon=center_lon,
-        max_distance_km=distance_km if (center_lat is not None and center_lon is not None) else None,
+        center_lat=center_lat if use_client_radius else None,
+        center_lon=center_lon if use_client_radius else None,
+        max_distance_km=(distance_km if use_client_radius else None),
     )
 
     inserted = upsert_offers(prepared)
@@ -227,6 +229,7 @@ def cmd_sweep(args):
             )
             if not raw:
                 break
+            use_client_radius = bool(cfg.api_simulate and center_lat is not None and center_lon is not None and distance_km is not None)
             prepared = dedup_and_prepare_offers(
                 raw,
                 rome_codes=[],
@@ -234,9 +237,9 @@ def cmd_sweep(args):
                 base_lat=center_lat or base_lat,
                 base_lon=center_lon or base_lon,
                 apply_relevance=False,
-                center_lat=center_lat,
-                center_lon=center_lon,
-                max_distance_km=distance_km if (center_lat is not None and center_lon is not None) else None,
+                center_lat=center_lat if use_client_radius else None,
+                center_lon=center_lon if use_client_radius else None,
+                max_distance_km=(distance_km if use_client_radius else None),
             )
             total_prepared += len(prepared)
             upsert_offers(prepared)

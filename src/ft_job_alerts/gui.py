@@ -140,6 +140,8 @@ class App(ttk.Frame):
         # Buttons
         frm_btn = ttk.Frame(self)
         frm_btn.pack(fill=tk.X, padx=10, pady=6)
+        self.var_clear = tk.BooleanVar(value=False)
+        ttk.Checkbutton(frm_btn, text="Nettoyer la base avant la recherche", variable=self.var_clear).pack(side=tk.LEFT, padx=6)
         self.btn_run = ttk.Button(frm_btn, text="Lancer", command=self._on_run)
         self.btn_run.pack(side=tk.LEFT)
         ttk.Button(frm_btn, text="Ouvrir le dossier de sortie", command=lambda: _open_folder(os.path.join("data", "out"))).pack(side=tk.LEFT, padx=8)
@@ -266,6 +268,16 @@ class App(ttk.Frame):
             messagebox.showerror("Erreur DB", str(e))
             self.btn_run.configure(state=tk.NORMAL)
             return
+        # Optional: clear DB before run
+        if self.var_clear.get():
+            try:
+                from .storage import clear_offers
+                clear_offers()
+                self._log("Base nettoyée (table offers vidée).")
+            except Exception as e:
+                messagebox.showerror("Erreur DB", f"Nettoyage impossible: {e}")
+                self.btn_run.configure(state=tk.NORMAL)
+                return
         params = self._gather_inputs()
         # Convert name → INSEE when using commune mode
         if self.loc_choice.get() == "commune" and params.get("commune"):
