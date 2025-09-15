@@ -13,7 +13,7 @@ from typing import Any, List
 from .config import load_config
 from .profiles import get_categories, get_domains, get_default_profile
 from .storage import init_db, query_offers
-from .exporter import export_txt, export_md, export_csv, export_jsonl
+from .exporter import export_txt, export_md, export_csv, export_jsonl, export_html
 from .cli import cmd_fetch
 
 
