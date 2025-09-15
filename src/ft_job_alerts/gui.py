@@ -11,33 +11,15 @@ from argparse import Namespace
 from typing import Any, List
 
 from .config import load_config
+from .profiles import get_categories, get_domains, get_default_profile
 from .storage import init_db, query_offers
 from .exporter import export_txt, export_md, export_csv, export_jsonl
 from .cli import cmd_fetch
 
 
-CATEGORIES: List[tuple[str, list[str]]] = [
-    ("Robotique / ROS", ["ros2", "ros", "robotique", "robot"]),
-    ("Vision industrielle", ["vision", "opencv", "halcon", "cognex", "keyence"]),
-    ("Navigation / SLAM", ["navigation", "slam", "path planning"]),
-    ("ROS stack", ["moveit", "nav2", "gazebo", "urdf", "tf2", "pcl", "rclcpp", "rclpy", "colcon", "ament"]),
-    ("Marques robots", ["fanuc", "abb", "kuka", "staubli", "yaskawa", "ur"]),
-    ("Automatisme / PLC", ["automatisme", "plc", "grafcet", "siemens", "twincat"]),
-    ("Langages", ["c++", "python"]),
-    ("Capteurs", ["lidar", "camera", "imu"]),
-]
-
-# Domain templates for non-robotics users
-DOMAINS: List[tuple[str, List[str]]] = [
-    ("Custom (libre)", []),
-    ("Robotique (ROS/vision)", ["ros2", "ros", "robotique", "vision", "c++"]),
-    ("Software (général)", ["python", "java", "javascript", "backend", "fullstack"]),
-    ("Data / IA", ["data", "python", "pandas", "sql", "machine learning"]),
-    ("Automatisme / PLC", ["automatisme", "plc", "siemens", "twincat", "grafcet"]),
-    ("Logistique", ["logistique", "supply chain", "magasinier", "cariste"]),
-    ("Finance / Comptabilité", ["comptable", "audit", "finance"]),
-    ("Santé", ["infirmier", "infirmière", "aide soignant"]),
-]
+_CATEGORIES: List[tuple[str, list[str]]] = get_categories()
+_DOMAINS: List[tuple[str, List[str]]] = get_domains()
+_DEFAULT_PROFILE = get_default_profile() or {}
 
 
 def _open_folder(path: str) -> None:
@@ -88,13 +70,15 @@ class App(ttk.Frame):
         frm_cat = ttk.LabelFrame(self, text="Domaine et catégories")
         frm_cat.pack(fill=tk.X, padx=10, pady=8)
         ttk.Label(frm_cat, text="Domaine:").grid(row=0, column=0, sticky="e")
-        self.var_domain = tk.StringVar(value=DOMAINS[1][0])
-        self.opt_domain = ttk.OptionMenu(frm_cat, self.var_domain, DOMAINS[1][0], *[d[0] for d in DOMAINS], command=lambda *_: self._apply_domain_defaults())
+        # Determine default domain label
+        _dom_default = _DEFAULT_PROFILE.get("domain") or (_DOMAINS[1][0] if len(_DOMAINS) > 1 else _DOMAINS[0][0])
+        self.var_domain = tk.StringVar(value=_dom_default)
+        self.opt_domain = ttk.OptionMenu(frm_cat, self.var_domain, _dom_default, *[d[0] for d in _DOMAINS], command=lambda *_: self._apply_domain_defaults())
         self.opt_domain.grid(row=0, column=1, sticky="w", padx=6)
         self.var_smart = tk.BooleanVar(value=True)
         ttk.Checkbutton(frm_cat, text="Filtre intelligent (robotique)", variable=self.var_smart).grid(row=0, column=2, sticky="w", padx=8)
         self.var_cats: list[tk.BooleanVar] = []
-        for i, (label, _kw) in enumerate(CATEGORIES):
+        for i, (label, _kw) in enumerate(_CATEGORIES):
             var = tk.BooleanVar(value=False)
             self.var_cats.append(var)
             cb = ttk.Checkbutton(frm_cat, text=label, variable=var)
@@ -168,25 +152,55 @@ class App(ttk.Frame):
         self._apply_domain_defaults()
 
     def _apply_domain_defaults(self):
-        label = self.var_domain.get() if hasattr(self, 'var_domain') else DOMAINS[1][0]
+        label = self.var_domain.get() if hasattr(self, 'var_domain') else (_DOMAINS[1][0] if len(_DOMAINS) > 1 else _DOMAINS[0][0])
         # Reset categories
         if hasattr(self, 'var_cats'):
             for v in self.var_cats:
                 v.set(False)
-        # For robotics, enable smart filter and suggest a few keywords
-        if label.startswith("Robotique"):
-            self.var_smart.set(True)
-            if hasattr(self, 'ent_kw'):
+        # Apply defaults from profile when available
+        prof = _DEFAULT_PROFILE if isinstance(_DEFAULT_PROFILE, dict) else {}
+        sel_cats = {s for s in prof.get("selected_categories", []) if isinstance(s, str)}
+        # For robotics, enable smart filter by default
+        self.var_smart.set(label.startswith("Robotique"))
+        # Prefill domain keywords or profile extra
+        for name, kws in _DOMAINS:
+            if name == label and hasattr(self, 'ent_kw'):
+                default_kws = prof.get("extra_keywords") if sel_cats else kws
+                try:
+                    seq = [k.strip() for k in default_kws] if isinstance(default_kws, list) else list(default_kws)
+                except Exception:
+                    seq = kws
                 self.ent_kw.delete(0, tk.END)
-                self.ent_kw.insert(0, ", ".join(["ros2", "c++", "vision"]))
-        else:
-            self.var_smart.set(False)
-            # Prefill domain keywords
-            for name, kws in DOMAINS:
-                if name == label and hasattr(self, 'ent_kw'):
-                    self.ent_kw.delete(0, tk.END)
-                    self.ent_kw.insert(0, ", ".join(kws))
-                    break
+                self.ent_kw.insert(0, ", ".join(seq))
+                break
+        # Pre-select categories if profile lists them
+        if sel_cats and hasattr(self, 'var_cats'):
+            for var, (cat_label, _kw) in zip(self.var_cats, _CATEGORIES):
+                if cat_label in sel_cats:
+                    var.set(True)
+        # Apply other numeric defaults if provided
+        try:
+            if prof.get("published_since_days") and hasattr(self, 'ent_days'):
+                self.ent_days.delete(0, tk.END)
+                self.ent_days.insert(0, str(int(prof["published_since_days"])) )
+            if prof.get("topn") and hasattr(self, 'ent_top'):
+                self.ent_top.delete(0, tk.END)
+                self.ent_top.insert(0, str(int(prof["topn"])) )
+            if prof.get("export_format") and hasattr(self, 'var_fmt'):
+                self.var_fmt.set(str(prof["export_format"]).lower())
+            if "full_description" in prof and hasattr(self, 'var_full'):
+                self.var_full.set(bool(prof["full_description"]))
+            if prof.get("dept") and hasattr(self, 'ent_dept'):
+                self.ent_dept.delete(0, tk.END)
+                self.ent_dept.insert(0, str(prof["dept"]))
+            if prof.get("distance_km") and hasattr(self, 'ent_dist'):
+                self.ent_dist.delete(0, tk.END)
+                self.ent_dist.insert(0, str(int(prof["distance_km"])) )
+            if prof.get("min_salary_monthly") is not None and hasattr(self, 'ent_salary'):
+                self.ent_salary.delete(0, tk.END)
+                self.ent_salary.insert(0, str(prof["min_salary_monthly"]))
+        except Exception:
+            pass
 
     def _copy_prompt(self):
         text = _ai_prompt_text("<votre-fichier-export>.")
@@ -205,7 +219,7 @@ class App(ttk.Frame):
 
     def _gather_inputs(self) -> dict[str, Any]:
         kw: list[str] = []
-        for var, (_, lst) in zip(self.var_cats, CATEGORIES):
+        for var, (_, lst) in zip(self.var_cats, _CATEGORIES):
             if var.get():
                 kw.extend(lst)
         extra = self.ent_kw.get().strip()

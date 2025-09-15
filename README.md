@@ -173,3 +173,9 @@ GUI and TUI (no terminal skills required)
 - Graphical interface: `python run.py gui` or double‑click `run_gui.pyw` (Windows) / `run_gui.py` (macOS/Linux). Select categories, days, location, format; it fetches and exports automatically.
 - Interactive text menu: `python run.py tui` for a guided flow in the terminal.
 - Packaging (optional): with `pyproject.toml`, you can install locally and run the console script `ft-job-alerts` (after `pip install -e .`).
+
+Profiles and categories (optional)
+- The GUI/TUI categories, domains and default selections can be customized via a JSON file.
+- Point `PROFILES_PATH` in your `.env` to your config (default: `data/profiles.json`).
+- See `data/profiles.example.json` for the schema and a robotics‑oriented default profile (dept 68, radius 50 km, ROS/vision).
+- If the file is missing, built‑in defaults are used.

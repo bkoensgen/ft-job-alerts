@@ -18,6 +18,7 @@ from .nlp import tokenize, bigrams, log_odds_with_prior
 from .storage import update_offer_details
 from .charts import build_charts
 from .normalizer import normalize_offer
+from .profiles import get_categories as _get_cats, get_domains as _get_doms, get_default_profile as _get_prof
 from .cli_utils import dedup_and_prepare_offers, sanitize_published_since
 
 
@@ -716,28 +717,9 @@ def cmd_tui(_args):
     if cfg.api_simulate:
         print("Astuce: vous pouvez tout tester sans réseau (FT_API_SIMULATE=1).\n")
 
-    categories = [
-        ("Robotique / ROS", ["ros2", "ros", "robotique", "robot"]),
-        ("Vision industrielle", ["vision", "opencv", "halcon", "cognex", "keyence"]),
-        ("Navigation / SLAM", ["navigation", "slam", "path planning"]),
-        ("ROS stack (nav2, moveit…)", ["moveit", "nav2", "gazebo", "urdf", "tf2", "pcl", "rclcpp", "rclpy"]),
-        ("Marques robots", ["fanuc", "abb", "kuka", "staubli", "yaskawa", "ur"]),
-        ("Automatisme / PLC", ["automatisme", "plc", "grafcet", "siemens", "twincat"]),
-        ("Langages", ["c++", "python"]),
-        ("Capteurs", ["lidar", "camera", "imu"]),
-    ]
-
-    # Domain templates for non-robotics users
-    domains = [
-        ("Custom (libre)", []),
-        ("Robotique (ROS/vision)", ["ros2", "ros", "robotique", "vision", "c++"]),
-        ("Software (général)", ["python", "java", "javascript", "backend", "fullstack"]),
-        ("Data / IA", ["data", "python", "pandas", "sql", "machine learning"]),
-        ("Automatisme / PLC", ["automatisme", "plc", "siemens", "twincat", "grafcet"]),
-        ("Logistique", ["logistique", "supply chain", "magasinier", "cariste"]),
-        ("Finance / Comptabilité", ["comptable", "audit", "finance"]),
-        ("Santé", ["infirmier", "infirmière", "aide soignant"]),
-    ]
+    categories = _get_cats()
+    domains = _get_doms()
+    default_profile = _get_prof() or {}
 
     def ask(prompt: str, default: str | None = None) -> str:
         sfx = f" [{default}]" if default is not None else ""
@@ -755,19 +737,47 @@ def cmd_tui(_args):
     print("Choisissez un domaine (ex: 2 pour Robotique).")
     for i, (label, _kw) in enumerate(domains, start=1):
         print(f"  {i}) {label}")
+    # default to profile domain if provided, else keep ‘2’ when Robotique exists
+    default_dom_idx = 1  # 1-based index
+    prof_dom_label = default_profile.get("domain") if isinstance(default_profile, dict) else None
+    if prof_dom_label:
+        for i, (label, _kw) in enumerate(domains, start=1):
+            if label == prof_dom_label:
+                default_dom_idx = i
+                break
+    else:
+        for i, (label, _kw) in enumerate(domains, start=1):
+            if label.lower().startswith("robotique"):
+                default_dom_idx = i
+                break
     try:
-        dom_sel = int(input("Votre choix: ").strip() or "2")
+        dom_sel = int(input(f"Votre choix [{default_dom_idx}]: ").strip() or str(default_dom_idx))
     except Exception:
-        dom_sel = 2
+        dom_sel = default_dom_idx
     dom_sel = max(1, min(dom_sel, len(domains)))
     domain_label, domain_kw = domains[dom_sel - 1]
 
     selected_keywords: list[str] = []
-    if dom_sel == 2:  # Robotique: proposer les catégories fines
+    is_robotics = domain_label.lower().startswith("robotique")
+    if is_robotics:  # Robotique: proposer les catégories fines
         print("\nCatégories (ex: 1,3,5). Laissez vide pour mots-clés par défaut du domaine.")
         for i, (label, _) in enumerate(categories, start=1):
             print(f"  {i}) {label}")
-        sel = input("Votre sélection: ").strip()
+        # If profile provides pre-selected categories, show them as default hint
+        def_sel_hint = None
+        if isinstance(default_profile, dict) and default_profile.get("selected_categories"):
+            names = [n for n in default_profile.get("selected_categories", []) if isinstance(n, str)]
+            # map names to indices
+            idxs: list[int] = []
+            name_to_idx = {label: i for i, (label, _) in enumerate(categories, start=1)}
+            for n in names:
+                i = name_to_idx.get(n)
+                if i:
+                    idxs.append(i)
+            if idxs:
+                def_sel_hint = ",".join(str(i) for i in sorted(set(idxs)))
+        prompt = "Votre sélection" + (f" [{def_sel_hint}]" if def_sel_hint else "") + ": "
+        sel = input(prompt).strip()
         if sel:
             try:
                 ids = [int(x) for x in sel.replace(" ", "").split(",") if x]
@@ -777,10 +787,23 @@ def cmd_tui(_args):
             except Exception:
                 pass
         if not selected_keywords:
-            selected_keywords = domain_kw or cfg.default_keywords
+            # Use profile pre-selected categories when present
+            names = [n for n in default_profile.get("selected_categories", [])] if isinstance(default_profile, dict) else []
+            if names:
+                by_name = {label: kws for label, kws in categories}
+                for n in names:
+                    selected_keywords.extend(by_name.get(n, []))
+            if not selected_keywords:
+                selected_keywords = domain_kw or cfg.default_keywords
     else:
         selected_keywords = domain_kw or []
-    extra_kw = ask("Mots-clés supplémentaires (séparés par des virgules)", "").strip()
+    extra_default = ""
+    if isinstance(default_profile, dict) and default_profile.get("extra_keywords"):
+        try:
+            extra_default = ", ".join([k for k in default_profile.get("extra_keywords", [])])
+        except Exception:
+            extra_default = ""
+    extra_kw = ask("Mots-clés supplémentaires (séparés par des virgules)", extra_default).strip()
     if extra_kw:
         selected_keywords.extend([k.strip() for k in extra_kw.split(",") if k.strip()])
     # Remove duplicates, keep order
@@ -794,34 +817,41 @@ def cmd_tui(_args):
     commune = None
     distance_km = None
     if use_dept:
-        dept = ask("  Code(s) département (ex: 68 ou 68,67)", cfg.default_dept)
+        d_default = (default_profile.get("dept") if isinstance(default_profile, dict) else None) or cfg.default_dept
+        dept = ask("  Code(s) département (ex: 68 ou 68,67)", d_default)
     else:
         if ask_yes("  Rechercher autour d'une commune (INSEE) ?", False):
             commune = ask("    Code INSEE commune", "") or None
             if commune:
                 try:
-                    distance_km = int(ask("    Distance (km)", str(cfg.default_radius_km)))
+                    r_default = (default_profile.get("distance_km") if isinstance(default_profile, dict) else None) or cfg.default_radius_km
+                    distance_km = int(ask("    Distance (km)", str(r_default)))
                 except Exception:
                     distance_km = cfg.default_radius_km
 
     # Time window and export options
     print("\nFenêtre temporelle de publication (Offres v2). Valeurs permises: 1,3,7,14,31")
     try:
-        pdays = int(ask("  Nombre de jours", "7"))
+        dflt_days = (default_profile.get("published_since_days") if isinstance(default_profile, dict) else None) or 7
+        pdays = int(ask("  Nombre de jours", str(dflt_days)))
     except Exception:
         pdays = 7
     try:
-        topn = int(ask("  Nombre maximal d'offres à exporter", "100"))
+        dflt_top = (default_profile.get("topn") if isinstance(default_profile, dict) else None) or 100
+        topn = int(ask("  Nombre maximal d'offres à exporter", str(dflt_top)))
     except Exception:
         topn = 100
-    fmt = ask("  Format d'export (txt/md/csv/jsonl)", "md").lower() or "md"
-    full_desc = fmt in ("md", "txt") and ask_yes("  Inclure la description complète ?", True)
+    dflt_fmt = (default_profile.get("export_format") if isinstance(default_profile, dict) else None) or "md"
+    fmt = ask("  Format d'export (txt/md/csv/jsonl)", str(dflt_fmt)).lower() or "md"
+    dflt_full = bool(default_profile.get("full_description")) if isinstance(default_profile, dict) and default_profile.get("full_description") is not None else True
+    full_desc = fmt in ("md", "txt") and ask_yes("  Inclure la description complète ?", dflt_full)
     desc_chars = -1 if full_desc else (500 if fmt == "md" else 400)
     # Smart filter (robotique)
-    use_smart = dom_sel == 2 and ask_yes("  Appliquer le filtre intelligent (robotique/ROS) ?", True)
+    use_smart = is_robotics and ask_yes("  Appliquer le filtre intelligent (robotique/ROS) ?", True)
     # Salary filter
     min_salary_monthly = None
-    ans = ask("  Rémunération minimum (€/mois) — laisser vide pour ignorer", "").strip()
+    dflt_sal = default_profile.get("min_salary_monthly") if isinstance(default_profile, dict) else None
+    ans = ask("  Rémunération minimum (€/mois) — laisser vide pour ignorer", "" if dflt_sal is None else str(dflt_sal)).strip()
     if ans:
         try:
             min_salary_monthly = float(ans.replace(",", "."))

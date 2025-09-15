@@ -1,0 +1,48 @@
+{
+  "categories": [
+    {"name": "Robotique / ROS", "keywords": ["ros2", "ros", "robotique", "robot"]},
+    {"name": "Vision industrielle", "keywords": ["vision", "opencv", "halcon", "cognex", "keyence"]},
+    {"name": "Navigation / SLAM", "keywords": ["navigation", "slam", "path planning"]},
+    {"name": "ROS stack", "keywords": ["moveit", "nav2", "gazebo", "urdf", "tf2", "pcl", "rclcpp", "rclpy", "colcon", "ament"]},
+    {"name": "Marques robots", "keywords": ["fanuc", "abb", "kuka", "staubli", "yaskawa", "ur"]},
+    {"name": "Automatisme / PLC", "keywords": ["automatisme", "plc", "grafcet", "siemens", "twincat"]},
+    {"name": "Capteurs", "keywords": ["lidar", "camera", "imu"]},
+    {"name": "Langages", "keywords": ["c++", "python"]},
+    {"name": "AGV / AMR / Mobile", "keywords": ["agv", "amr", "mobile robot", "fleet manager"]},
+    {"name": "IVVQ / Validation / Test", "keywords": ["ivvq", "validation", "intégration", "tests", "verification"]},
+    {"name": "Embarqué / Temps réel", "keywords": ["embarqué", "temps réel", "rtos", "stm32", "microcontrôleur"]},
+    {"name": "Intégration / Machines spéciales", "keywords": ["machine spéciale", "intégration", "îlot robotisé", "îlot robotise"]}
+  ],
+  "domains": [
+    {"name": "Custom (libre)", "keywords": []},
+    {"name": "Robotique (ROS/vision)", "keywords": ["ros2", "ros", "robotique", "vision", "c++"]},
+    {"name": "Software (général)", "keywords": ["python", "java", "javascript", "backend", "fullstack"]},
+    {"name": "Data / IA", "keywords": ["data", "python", "pandas", "sql", "machine learning"]},
+    {"name": "Automatisme / PLC", "keywords": ["automatisme", "plc", "siemens", "twincat", "grafcet"]},
+    {"name": "Logistique", "keywords": ["logistique", "supply chain", "magasinier", "cariste"]},
+    {"name": "Finance / Comptabilité", "keywords": ["comptable", "audit", "finance"]},
+    {"name": "Santé", "keywords": ["infirmier", "infirmière", "aide soignant"]}
+  ],
+  "default_profile": {
+    "domain": "Robotique (ROS/vision)",
+    "selected_categories": [
+      "Robotique / ROS",
+      "Vision industrielle",
+      "ROS stack",
+      "Navigation / SLAM",
+      "Marques robots",
+      "Automatisme / PLC",
+      "Capteurs",
+      "AGV / AMR / Mobile"
+    ],
+    "extra_keywords": ["ros2", "c++", "vision"],
+    "dept": "68",
+    "distance_km": 50,
+    "published_since_days": 7,
+    "topn": 100,
+    "export_format": "md",
+    "full_description": true,
+    "min_salary_monthly": null
+  }
+}
+
